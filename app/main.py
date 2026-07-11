@@ -65,7 +65,10 @@ class LoginRequest(BaseModel):
 
 @app.post("/admin/login")
 def admin_login(body: LoginRequest):
-    result = supabase.table("admins").select("*").eq("email", body.email).execute()
+    try:
+        result = supabase.table("admins").select("*").eq("email", body.email).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"admins lookup failed: {e}")
     if not result.data:
         raise HTTPException(status_code=401, detail="Invalid email or password.")
 
@@ -143,10 +146,12 @@ def admin_signup(body: SignupRequest, x_signup_secret: str | None = Header(defau
 def dashboard(admin: dict = Depends(require_role("gym_admin"))):
     gym_id = admin["gym_id"]
 
-    members = supabase.table("members").select("id", count="exact").eq("gym_id", gym_id).execute()
-
-    active_members = supabase.table("members").select("id", count="exact") \
-        .eq("gym_id", gym_id).eq("status", "active").execute()
+    try:
+        members = supabase.table("members").select("id", count="exact").eq("gym_id", gym_id).execute()
+        active_members = supabase.table("members").select("id", count="exact") \
+            .eq("gym_id", gym_id).eq("status", "active").execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"dashboard member counts failed: {e}")
 
     today = datetime.now(timezone.utc).date()
     week_out = today + timedelta(days=7)
@@ -195,22 +200,30 @@ def add_member(body: AddMemberRequest, admin: dict = Depends(require_role("gym_a
     gym_id = admin["gym_id"]
 
     # retry on the rare collision — login_code is unique
-    for _ in range(5):
-        code = generate_login_code()
-        existing = supabase.table("members").select("id").eq("login_code", code).execute()
-        if not existing.data:
-            break
-    else:
-        raise HTTPException(status_code=500, detail="Could not generate a unique code, try again.")
+    try:
+        for _ in range(5):
+            code = generate_login_code()
+            existing = supabase.table("members").select("id").eq("login_code", code).execute()
+            if not existing.data:
+                break
+        else:
+            raise HTTPException(status_code=500, detail="Could not generate a unique code, try again.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"login_code collision check failed: {e}")
 
-    result = supabase.table("members").insert({
-        "gym_id": gym_id,
-        "name": body.name,
-        "phone": body.phone,
-        "email": body.email,
-        "login_code": code,
-        "status": "active",
-    }).execute()
+    try:
+        result = supabase.table("members").insert({
+            "gym_id": gym_id,
+            "name": body.name,
+            "phone": body.phone,
+            "email": body.email,
+            "login_code": code,
+            "status": "active",
+        }).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"members insert failed: {e}")
 
     # TODO: trigger WhatsApp send here once messaging provider is wired up
 
@@ -260,7 +273,10 @@ def edit_member(member_id: str, body: EditMemberRequest, admin: dict = Depends(r
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update.")
 
-    result = supabase.table("members").update(updates).eq("id", member_id).eq("gym_id", gym_id).execute()
+    try:
+        result = supabase.table("members").update(updates).eq("id", member_id).eq("gym_id", gym_id).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"member update failed: {e}")
     if not result.data:
         raise HTTPException(status_code=404, detail="Member not found in your gym.")
     return {"member": result.data[0]}
@@ -270,8 +286,11 @@ def edit_member(member_id: str, body: EditMemberRequest, admin: dict = Depends(r
 @app.post("/admin/members/{member_id}/suspend")
 def suspend_member(member_id: str, admin: dict = Depends(require_role("gym_admin"))):
     gym_id = admin["gym_id"]
-    result = supabase.table("members").update({"status": "suspended"}) \
-        .eq("id", member_id).eq("gym_id", gym_id).execute()
+    try:
+        result = supabase.table("members").update({"status": "suspended"}) \
+            .eq("id", member_id).eq("gym_id", gym_id).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"suspend failed: {e}")
     if not result.data:
         raise HTTPException(status_code=404, detail="Member not found in your gym.")
     return {"member": result.data[0]}
@@ -280,8 +299,11 @@ def suspend_member(member_id: str, admin: dict = Depends(require_role("gym_admin
 @app.post("/admin/members/{member_id}/reactivate")
 def reactivate_member(member_id: str, admin: dict = Depends(require_role("gym_admin"))):
     gym_id = admin["gym_id"]
-    result = supabase.table("members").update({"status": "active"}) \
-        .eq("id", member_id).eq("gym_id", gym_id).execute()
+    try:
+        result = supabase.table("members").update({"status": "active"}) \
+            .eq("id", member_id).eq("gym_id", gym_id).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"reactivate failed: {e}")
     if not result.data:
         raise HTTPException(status_code=404, detail="Member not found in your gym.")
     return {"member": result.data[0]}
@@ -291,7 +313,10 @@ def reactivate_member(member_id: str, admin: dict = Depends(require_role("gym_ad
 @app.delete("/admin/members/{member_id}")
 def delete_member(member_id: str, admin: dict = Depends(require_role("gym_admin"))):
     gym_id = admin["gym_id"]
-    result = supabase.table("members").delete().eq("id", member_id).eq("gym_id", gym_id).execute()
+    try:
+        result = supabase.table("members").delete().eq("id", member_id).eq("gym_id", gym_id).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"delete failed: {e}")
     if not result.data:
         raise HTTPException(status_code=404, detail="Member not found in your gym.")
     return {"deleted": True, "member_id": member_id}
@@ -302,19 +327,25 @@ def delete_member(member_id: str, admin: dict = Depends(require_role("gym_admin"
 def regenerate_code(member_id: str, admin: dict = Depends(require_role("gym_admin"))):
     gym_id = admin["gym_id"]
 
-    existing_member = supabase.table("members").select("id").eq("id", member_id).eq("gym_id", gym_id).execute()
-    if not existing_member.data:
-        raise HTTPException(status_code=404, detail="Member not found in your gym.")
+    try:
+        existing_member = supabase.table("members").select("id").eq("id", member_id).eq("gym_id", gym_id).execute()
+        if not existing_member.data:
+            raise HTTPException(status_code=404, detail="Member not found in your gym.")
 
-    for _ in range(5):
-        code = generate_login_code()
-        clash = supabase.table("members").select("id").eq("login_code", code).execute()
-        if not clash.data:
-            break
-    else:
-        raise HTTPException(status_code=500, detail="Could not generate a unique code, try again.")
+        for _ in range(5):
+            code = generate_login_code()
+            clash = supabase.table("members").select("id").eq("login_code", code).execute()
+            if not clash.data:
+                break
+        else:
+            raise HTTPException(status_code=500, detail="Could not generate a unique code, try again.")
 
-    result = supabase.table("members").update({"login_code": code}).eq("id", member_id).execute()
+        result = supabase.table("members").update({"login_code": code}).eq("id", member_id).execute()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"regenerate code failed: {e}")
+
     # TODO: send new code via WhatsApp once messaging provider is wired up
     return {"member": result.data[0], "login_code": code}
 
@@ -332,7 +363,10 @@ class MarkPaidRequest(BaseModel):
 def mark_paid(member_id: str, body: MarkPaidRequest, admin: dict = Depends(require_role("gym_admin"))):
     gym_id = admin["gym_id"]
 
-    member = supabase.table("members").select("id").eq("id", member_id).eq("gym_id", gym_id).execute()
+    try:
+        member = supabase.table("members").select("id").eq("id", member_id).eq("gym_id", gym_id).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"member lookup failed: {e}")
     if not member.data:
         raise HTTPException(status_code=404, detail="Member not found in your gym.")
 
@@ -371,7 +405,10 @@ def mark_paid(member_id: str, body: MarkPaidRequest, admin: dict = Depends(requi
 @app.get("/admin/export/members")
 def export_members(admin: dict = Depends(require_role("gym_admin"))):
     gym_id = admin["gym_id"]
-    result = supabase.table("members").select("*").eq("gym_id", gym_id).execute()
+    try:
+        result = supabase.table("members").select("*").eq("gym_id", gym_id).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"export query failed: {e}")
     members = result.data or []
 
     wb = Workbook()

@@ -58,6 +58,9 @@ end $$;
 -- members.expiry_date, needed by Membership Payment + dashboard "expiring soon"
 alter table members add column if not exists expiry_date date;
 
+-- members.email, used by Add Member (optional field) — missing on live table
+alter table members add column if not exists email text;
+
 -- New payments table for Membership Payment feature
 create table if not exists payments (
     id uuid primary key default gen_random_uuid(),
