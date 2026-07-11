@@ -3,7 +3,7 @@ import string
 from pathlib import Path
 
 from fastapi import FastAPI, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
@@ -21,6 +21,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Safety net: any unhandled exception anywhere still returns JSON with
+# CORS headers, instead of a bare 500 that the browser reports as a
+# CORS error (because Render's raw crash page skips CORSMiddleware).
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Unhandled server error: {exc}"},
+    )
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -78,26 +89,38 @@ class SignupRequest(BaseModel):
 
 @app.post("/admin/signup")
 def admin_signup(body: SignupRequest):
-    existing_slug = supabase.table("gyms").select("id").eq("slug", body.gym_slug).execute()
+    try:
+        existing_slug = supabase.table("gyms").select("id").eq("slug", body.gym_slug).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"gyms.slug lookup failed: {e}")
     if existing_slug.data:
         raise HTTPException(status_code=400, detail="That gym slug is already taken.")
 
-    existing_email = supabase.table("admins").select("id").eq("email", body.admin_email).execute()
+    try:
+        existing_email = supabase.table("admins").select("id").eq("email", body.admin_email).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"admins.email lookup failed: {e}")
     if existing_email.data:
         raise HTTPException(status_code=400, detail="That email is already registered.")
 
-    gym = supabase.table("gyms").insert({
-        "name": body.gym_name,
-        "slug": body.gym_slug,
-    }).execute()
-    gym_id = gym.data[0]["id"]
+    try:
+        gym = supabase.table("gyms").insert({
+            "name": body.gym_name,
+            "slug": body.gym_slug,
+        }).execute()
+        gym_id = gym.data[0]["id"]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"gyms insert failed: {e}")
 
-    admin = supabase.table("admins").insert({
-        "gym_id": gym_id,
-        "email": body.admin_email,
-        "password_hash": hash_password(body.admin_password),
-        "role": "gym_admin",
-    }).execute()
+    try:
+        admin = supabase.table("admins").insert({
+            "gym_id": gym_id,
+            "email": body.admin_email,
+            "password_hash": hash_password(body.admin_password),
+            "role": "gym_admin",
+        }).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"admins insert failed: {e}")
 
     token = create_token(sub=admin.data[0]["id"], role="gym_admin", gym_id=gym_id)
     return {"access_token": token, "role": "gym_admin", "gym_id": gym_id}
