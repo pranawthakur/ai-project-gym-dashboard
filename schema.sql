@@ -1,26 +1,56 @@
--- Additive schema for gym admin dashboard.
--- Does NOT touch your existing members/plans tables.
--- Safe to run against the same Supabase project as promptgen-backend.
+-- Idempotent fix: adds missing columns to gyms table whether it
+-- pre-existed (from another app) or was just created without them.
+-- Safe to run multiple times.
 
 create table if not exists gyms (
-    id uuid primary key default gen_random_uuid(),
-    name text not null,
-    slug text unique not null,              -- e.g. "goldgym" -> goldgym.yourapp.com
-    status text not null default 'active',  -- active | suspended | deactivated
-    subscription_status text not null default 'trial',  -- trial | active | grace | suspended
-    created_at timestamptz not null default now()
+    id uuid primary key default gen_random_uuid()
 );
 
+alter table gyms add column if not exists name text;
+alter table gyms add column if not exists slug text;
+alter table gyms add column if not exists status text not null default 'active';
+alter table gyms add column if not exists subscription_status text not null default 'trial';
+alter table gyms add column if not exists created_at timestamptz not null default now();
+
+-- Add the unique constraint on slug only if it isn't already there
+do $$
+begin
+    if not exists (
+        select 1 from pg_constraint where conname = 'gyms_slug_key'
+    ) then
+        alter table gyms add constraint gyms_slug_key unique (slug);
+    end if;
+end $$;
+
+-- Same defensive pattern for admins, in case it also pre-existed partially
 create table if not exists admins (
-    id uuid primary key default gen_random_uuid(),
-    gym_id uuid references gyms(id) on delete cascade,  -- null = developer (platform-level)
-    email text unique not null,
-    password_hash text not null,
-    role text not null default 'gym_admin',  -- gym_admin | developer
-    disabled boolean not null default false,
-    created_at timestamptz not null default now()
+    id uuid primary key default gen_random_uuid()
 );
 
--- Your existing `members` table already has gym_id per membership.py.
--- If it doesn't have a login `code` column yet, add it:
-alter table members add column if not exists login_code text unique;
+alter table admins add column if not exists gym_id uuid references gyms(id) on delete cascade;
+alter table admins add column if not exists email text;
+alter table admins add column if not exists password_hash text;
+alter table admins add column if not exists role text not null default 'gym_admin';
+alter table admins add column if not exists disabled boolean not null default false;
+alter table admins add column if not exists created_at timestamptz not null default now();
+
+do $$
+begin
+    if not exists (
+        select 1 from pg_constraint where conname = 'admins_email_key'
+    ) then
+        alter table admins add constraint admins_email_key unique (email);
+    end if;
+end $$;
+
+-- members.login_code, in case it also didn't take
+alter table members add column if not exists login_code text;
+
+do $$
+begin
+    if not exists (
+        select 1 from pg_constraint where conname = 'members_login_code_key'
+    ) then
+        alter table members add constraint members_login_code_key unique (login_code);
+    end if;
+end $$;
