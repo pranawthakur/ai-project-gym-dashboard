@@ -74,6 +74,9 @@ button.submit:disabled { opacity:.6; cursor:not-allowed; transform:none; }
     <label class="lbl">Admin Password</label>
     <input type="password" id="signupPassword" required placeholder="••••••••" />
 
+    <label class="lbl">Signup Secret</label>
+    <input type="password" id="signupSecret" required placeholder="value of SIGNUP_SECRET in your env vars" />
+
     <button type="submit" class="submit" id="signupBtn" style="background:transparent; border:1px solid var(--border); box-shadow:none;">Create Gym + Admin</button>
     <p class="error" id="signupError"></p>
   </form>
@@ -99,7 +102,12 @@ document.getElementById("signupForm").addEventListener("submit", async (e) => {
   try {
     const res = await fetch(`${API_BASE}/admin/signup`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // Backend requires this header to match SIGNUP_SECRET (Render env
+        // var) — without it every signup gets rejected with 403.
+        "X-Signup-Secret": document.getElementById("signupSecret").value,
+      },
       body: JSON.stringify({
         gym_name: document.getElementById("signupGymName").value,
         admin_email: document.getElementById("signupEmail").value,
@@ -112,7 +120,8 @@ document.getElementById("signupForm").addEventListener("submit", async (e) => {
     localStorage.setItem("admin_token", data.access_token);
     localStorage.setItem("admin_role", data.role);
     localStorage.setItem("admin_gym_id", data.gym_id || "");
-    window.location.href = "/dashboard.html";
+    // bug fix: "/dashboard.html" isn't a route this app serves
+    window.location.href = "/admin/dashboard-page";
   } catch (err) {
     errorMsg.textContent = err.message;
     errorMsg.style.display = "block";
@@ -146,7 +155,8 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
     localStorage.setItem("admin_token", data.access_token);
     localStorage.setItem("admin_role", data.role);
     localStorage.setItem("admin_gym_id", data.gym_id || "");
-    window.location.href = "/dashboard.html";
+    // bug fix: "/dashboard.html" isn't a route this app serves
+    window.location.href = "/admin/dashboard-page";
   } catch (err) {
     errorMsg.textContent = err.message;
     errorMsg.style.display = "block";
