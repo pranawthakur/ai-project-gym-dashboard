@@ -54,9 +54,16 @@ h1 { font-family:'Baloo 2',cursive; font-size:1.8rem; font-weight:800; margin:0 
 
 .stats-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:32px; }
 @media (max-width:700px) { .stats-grid { grid-template-columns:repeat(2,1fr); } }
-.stat-card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:18px; animation:fadeUp .5s cubic-bezier(.16,1,.3,1) both; }
-.stat-card .num { font-size:1.6rem; font-weight:800; color:#c4b5fd; }
+.stat-card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:18px; animation:fadeUp .5s cubic-bezier(.16,1,.3,1) both; transition:border-color .3s ease, box-shadow .3s ease; }
+.stat-card .num { font-size:1.6rem; font-weight:800; color:#c4b5fd; display:inline-block; transition:transform .25s ease; }
 .stat-card .label { font-size:12px; color:var(--muted); font-weight:600; margin-top:4px; }
+.stat-card.pulse { border-color:rgba(168,85,247,.6); box-shadow:0 0 0 3px rgba(168,85,247,.12); }
+.stat-card.pulse .num { transform:scale(1.12); }
+.live-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--success); margin-left:6px; box-shadow:0 0 0 0 rgba(74,222,128,.6); animation:livePulse 2s infinite; vertical-align:middle; }
+@keyframes livePulse { 0%{box-shadow:0 0 0 0 rgba(74,222,128,.55);} 70%{box-shadow:0 0 0 6px rgba(74,222,128,0);} 100%{box-shadow:0 0 0 0 rgba(74,222,128,0);} }
+tr.row-new { animation:rowIn .5s ease both; }
+@keyframes rowIn { from{opacity:0; background:rgba(168,85,247,.18); transform:translateY(-4px);} to{opacity:1; transform:translateY(0);} }
+tr.row-updating { opacity:.5; pointer-events:none; transition:opacity .2s ease; }
 
 .card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:22px; margin-bottom:24px; box-shadow:var(--shadow-card); animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; }
 .card-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; gap:12px; flex-wrap:wrap; }
@@ -147,7 +154,7 @@ tr:hover td { background:rgba(139,92,246,.05); }
 
       <!-- ── Dashboard view ─────────────────────────────────────── -->
       <div class="view active" id="viewDashboard">
-        <h1>Dashboard</h1>
+        <h1>Dashboard <span class="live-dot" title="Live"></span></h1>
 
         <div class="stats-grid" id="statsGrid">
           <div class="stat-card"><div class="num" id="statTotalMembers">—</div><div class="label">Total Members</div></div>
@@ -196,7 +203,7 @@ tr:hover td { background:rgba(139,92,246,.05); }
           </div>
 
           <div class="filters">
-            <input type="text" id="searchInput" placeholder="Search by name or phone number…" oninput="renderMembersTable()" />
+            <input type="text" id="searchInput" placeholder="Search by name or phone number…" oninput="debouncedRender()" />
             <select id="statusFilter" onchange="loadMembers()">
               <option value="">All statuses</option>
               <option value="active">Active</option>
@@ -267,7 +274,9 @@ tr:hover td { background:rgba(139,92,246,.05); }
 const API_BASE = "https://ai-project-gym-dashboard.onrender.com";
 const token = localStorage.getItem("admin_token");
 
-if (!token) window.location.href = "/login.html";
+// bug fix: this used to point at "/login.html", which isn't a route this
+// app serves — the real login page is /admin/login-page.
+if (!token) window.location.href = "/admin/login-page";
 
 function authHeaders() {
   return { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" };
@@ -277,7 +286,7 @@ function logout() {
   localStorage.removeItem("admin_token");
   localStorage.removeItem("admin_role");
   localStorage.removeItem("admin_gym_id");
-  window.location.href = "/login.html";
+  window.location.href = "/admin/login-page";
 }
 
 // ── Sidebar toggle ──────────────────────────────────────────────
@@ -298,17 +307,53 @@ document.querySelectorAll(".nav-item[data-view]").forEach(btn => {
 document.getElementById("navExport").addEventListener("click", downloadExport);
 
 // ── Dashboard stats ─────────────────────────────────────────────
-async function loadDashboard() {
-  const res = await fetch(`${API_BASE}/admin/dashboard`, { headers: authHeaders() });
-  if (res.status === 401 || res.status === 403) return logout();
-  const data = await res.json();
-  document.getElementById("statTotalMembers").textContent = data.total_members;
-  document.getElementById("statTodayLogins").textContent = data.todays_logins;
-  document.getElementById("statActive").textContent = data.active_members;
-  document.getElementById("statExpiring").textContent = data.expiring_memberships;
-  document.getElementById("statPending").textContent = data.pending_renewals;
-  document.getElementById("statRevenue").textContent = "₹" + data.todays_revenue;
+// Tracks last-seen values so we only pulse the cards that actually changed,
+// instead of flashing the whole grid on every poll.
+let lastStats = {};
+
+function setStat(id, value) {
+  const el = document.getElementById(id);
+  const display = typeof value === "number" ? value : value;
+  if (lastStats[id] !== undefined && lastStats[id] !== display) {
+    const card = el.closest(".stat-card");
+    card.classList.add("pulse");
+    setTimeout(() => card.classList.remove("pulse"), 500);
+  }
+  lastStats[id] = display;
+  el.textContent = display;
 }
+
+async function loadDashboard(silent) {
+  try {
+    const res = await fetch(`${API_BASE}/admin/dashboard`, { headers: authHeaders() });
+    if (res.status === 401 || res.status === 403) return logout();
+    if (!res.ok) throw new Error("dashboard fetch failed");
+    const data = await res.json();
+    setStat("statTotalMembers", data.total_members);
+    setStat("statTodayLogins", data.todays_logins);
+    setStat("statActive", data.active_members);
+    setStat("statExpiring", data.expiring_memberships);
+    setStat("statPending", data.pending_renewals);
+    setStat("statRevenue", "₹" + data.todays_revenue);
+  } catch (err) {
+    // silent polling failures shouldn't interrupt the admin — only surface
+    // an error on the very first load
+    if (!silent) showBanner("err", "Could not load dashboard stats.");
+  }
+}
+
+// Poll quietly every 20s so numbers stay live without the admin refreshing.
+// Paused while the tab is hidden to avoid wasted calls.
+let dashboardPoll = null;
+function startDashboardPolling() {
+  if (dashboardPoll) clearInterval(dashboardPoll);
+  dashboardPoll = setInterval(() => {
+    if (document.visibilityState === "visible") loadDashboard(true);
+  }, 20000);
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") loadDashboard(true);
+});
 
 // ── Members list, search, filter ────────────────────────────────
 let allMembers = [];
@@ -325,13 +370,21 @@ async function loadMembers() {
   renderMembersTable();
 }
 
-function renderMembersTable() {
+// Debounce search so we're not re-rendering the table on every keystroke.
+let searchDebounce = null;
+function debouncedRender() {
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(renderMembersTable, 200);
+}
+
+function renderMembersTable(highlightId) {
   const search = document.getElementById("searchInput").value.trim().toLowerCase();
   let members = allMembers;
   if (search) {
     members = members.filter(m =>
       (m.name || "").toLowerCase().includes(search) ||
-      (m.phone || "").includes(search)
+      (m.phone || "").includes(search) ||
+      (m.email || "").toLowerCase().includes(search)
     );
   }
 
@@ -342,7 +395,7 @@ function renderMembersTable() {
   }
 
   tbody.innerHTML = members.map(m => `
-    <tr>
+    <tr id="member-row-${m.id}" class="${m.id === highlightId ? 'row-new' : ''}">
       <td>${escapeHtml(m.name || "")}</td>
       <td>${escapeHtml(m.phone || "")}</td>
       <td><span class="code-pill">${escapeHtml(m.login_code || "")}</span></td>
@@ -365,6 +418,16 @@ function renderMembersTable() {
   `).join("");
 }
 
+// Patches one member in local state + re-renders, instead of re-fetching
+// the whole list from the server on every suspend/delete/edit/etc.
+function patchLocalMember(id, changes) {
+  const idx = allMembers.findIndex(m => m.id === id);
+  if (idx !== -1) allMembers[idx] = { ...allMembers[idx], ...changes };
+}
+function removeLocalMember(id) {
+  allMembers = allMembers.filter(m => m.id !== id);
+}
+
 function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 }
@@ -382,37 +445,59 @@ function showBanner(type, message) {
 }
 
 // ── Suspend / Reactivate / Delete / Regenerate ──────────────────
+// Each of these now patches the row it just changed and re-renders
+// immediately, rather than re-fetching the entire member list from the
+// server every time — feels instant, and cuts API calls a lot.
+function rowBusy(id, busy) {
+  const row = document.getElementById(`member-row-${id}`);
+  if (row) row.classList.toggle("row-updating", busy);
+}
+
 async function suspendMember(id) {
+  rowBusy(id, true);
   const res = await fetch(`${API_BASE}/admin/members/${id}/suspend`, { method: "POST", headers: authHeaders() });
   const data = await res.json();
+  rowBusy(id, false);
   if (!res.ok) return showBanner("err", data.detail || "Could not suspend member");
+  patchLocalMember(id, { status: "suspended" });
+  renderMembersTable();
   showBanner("ok", "Member suspended.");
-  await loadMembers(); await loadDashboard();
+  loadDashboard(true);
 }
 
 async function reactivateMember(id) {
+  rowBusy(id, true);
   const res = await fetch(`${API_BASE}/admin/members/${id}/reactivate`, { method: "POST", headers: authHeaders() });
   const data = await res.json();
+  rowBusy(id, false);
   if (!res.ok) return showBanner("err", data.detail || "Could not reactivate member");
+  patchLocalMember(id, { status: "active" });
+  renderMembersTable();
   showBanner("ok", "Member reactivated.");
-  await loadMembers(); await loadDashboard();
+  loadDashboard(true);
 }
 
 async function deleteMember(id, name) {
   if (!confirm(`Delete ${name || "this member"}? This can't be undone.`)) return;
+  rowBusy(id, true);
   const res = await fetch(`${API_BASE}/admin/members/${id}`, { method: "DELETE", headers: authHeaders() });
   const data = await res.json();
-  if (!res.ok) return showBanner("err", data.detail || "Could not delete member");
+  if (!res.ok) { rowBusy(id, false); return showBanner("err", data.detail || "Could not delete member"); }
+  removeLocalMember(id);
+  renderMembersTable();
   showBanner("ok", "Member deleted.");
-  await loadMembers(); await loadDashboard();
+  loadDashboard(true);
 }
 
 async function regenerateCode(id) {
+  rowBusy(id, true);
   const res = await fetch(`${API_BASE}/admin/members/${id}/regenerate-code`, { method: "POST", headers: authHeaders() });
   const data = await res.json();
+  rowBusy(id, false);
   if (!res.ok) return showBanner("err", data.detail || "Could not regenerate code");
+  patchLocalMember(id, { login_code: data.login_code });
+  renderMembersTable();
   showBanner("ok", `New login code: ${data.login_code}`);
-  await loadMembers();
 }
 
 // ── Edit modal ───────────────────────────────────────────────────
@@ -450,8 +535,9 @@ async function submitEdit() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Could not update member");
     closeModal("editModal");
+    patchLocalMember(editingId, data.member);
+    renderMembersTable();
     showBanner("ok", "Member updated.");
-    await loadMembers();
   } catch (err) {
     showBanner("err", err.message);
   } finally {
@@ -493,8 +579,10 @@ async function submitPayment() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Could not save payment");
     closeModal("payModal");
+    patchLocalMember(payingId, { expiry_date: data.new_expiry_date });
+    renderMembersTable();
     showBanner("ok", `Payment saved. New expiry date: ${data.new_expiry_date}.`);
-    await loadMembers(); await loadDashboard();
+    loadDashboard(true);
   } catch (err) {
     showBanner("err", err.message);
   } finally {
@@ -540,10 +628,17 @@ document.getElementById("addMemberForm").addEventListener("submit", async (e) =>
 
     document.getElementById("codeValue").textContent = data.login_code;
     document.getElementById("codeResult").style.display = "block";
+    setTimeout(() => { document.getElementById("codeResult").style.display = "none"; }, 8000);
     document.getElementById("addMemberForm").reset();
 
-    await loadMembers();
-    await loadDashboard();
+    // Drop the new member straight into local state and re-render the
+    // members table immediately — no waiting on a fresh fetch. If the
+    // Member Management tab is open, the new row appears with a highlight.
+    if (data.member) {
+      allMembers.unshift(data.member);
+      renderMembersTable(data.member.id);
+    }
+    loadDashboard(true);
   } catch (err) {
     alert(err.message);
   } finally {
@@ -554,6 +649,7 @@ document.getElementById("addMemberForm").addEventListener("submit", async (e) =>
 
 loadDashboard();
 loadMembers();
+startDashboardPolling();
 </script>
 </body>
 </html>
