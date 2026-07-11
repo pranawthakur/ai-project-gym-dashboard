@@ -225,13 +225,14 @@ def list_members(
     status: str | None = None,
 ):
     gym_id = admin["gym_id"]
-    query = supabase.table("members").select("*").eq("gym_id", gym_id)
-
-    if status:
-        query = query.eq("status", status)
-
-    result = query.execute()
-    members = result.data or []
+    try:
+        query = supabase.table("members").select("*").eq("gym_id", gym_id)
+        if status:
+            query = query.eq("status", status)
+        result = query.execute()
+        members = result.data or []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"members list query failed: {e}")
 
     if search:
         s = search.lower()
