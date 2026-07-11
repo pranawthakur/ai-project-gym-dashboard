@@ -274,9 +274,7 @@ tr:hover td { background:rgba(139,92,246,.05); }
 const API_BASE = "https://ai-project-gym-dashboard.onrender.com";
 const token = localStorage.getItem("admin_token");
 
-// bug fix: this used to point at "/login.html", which isn't a route this
-// app serves — the real login page is /admin/login-page.
-if (!token) window.location.href = "/admin/login-page";
+if (!token) window.location.href = "/login.html";
 
 function authHeaders() {
   return { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" };
@@ -286,7 +284,7 @@ function logout() {
   localStorage.removeItem("admin_token");
   localStorage.removeItem("admin_role");
   localStorage.removeItem("admin_gym_id");
-  window.location.href = "/admin/login-page";
+  window.location.href = "/login.html";
 }
 
 // ── Sidebar toggle ──────────────────────────────────────────────

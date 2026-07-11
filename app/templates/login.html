@@ -112,8 +112,7 @@ document.getElementById("signupForm").addEventListener("submit", async (e) => {
     localStorage.setItem("admin_token", data.access_token);
     localStorage.setItem("admin_role", data.role);
     localStorage.setItem("admin_gym_id", data.gym_id || "");
-    // bug fix: "/dashboard.html" isn't a route this app serves
-    window.location.href = "/admin/dashboard-page";
+    window.location.href = "/dashboard.html";
   } catch (err) {
     errorMsg.textContent = err.message;
     errorMsg.style.display = "block";
@@ -147,8 +146,7 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
     localStorage.setItem("admin_token", data.access_token);
     localStorage.setItem("admin_role", data.role);
     localStorage.setItem("admin_gym_id", data.gym_id || "");
-    // bug fix: "/dashboard.html" isn't a route this app serves
-    window.location.href = "/admin/dashboard-page";
+    window.location.href = "/dashboard.html";
   } catch (err) {
     errorMsg.textContent = err.message;
     errorMsg.style.display = "block";
