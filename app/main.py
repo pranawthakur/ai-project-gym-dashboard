@@ -82,20 +82,20 @@ def admin_login(body: LoginRequest):
 # invite/approval gate, anyone with the URL can create a gym admin account.
 class SignupRequest(BaseModel):
     gym_name: str
-    gym_slug: str
     admin_email: str
     admin_password: str
 
 
+def generate_placeholder_slug() -> str:
+    # No domain/URL system yet — this just satisfies the DB's NOT NULL
+    # slug columns internally. Not shown to the user, not meant to be a
+    # real URL. Revisit once real subdomain routing exists.
+    return "gym-" + "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
+
+
 @app.post("/admin/signup")
 def admin_signup(body: SignupRequest):
-    try:
-        existing_slug = supabase.table("gyms").select("id").eq("slug", body.gym_slug).execute()
-        existing_signup_slug = supabase.table("gyms").select("id").eq("signup_slug", body.gym_slug).execute()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"gyms slug lookup failed: {e}")
-    if existing_slug.data or existing_signup_slug.data:
-        raise HTTPException(status_code=400, detail="That gym slug is already taken.")
+    placeholder_slug = generate_placeholder_slug()
 
     try:
         existing_email = supabase.table("admins").select("id").eq("email", body.admin_email).execute()
@@ -107,10 +107,9 @@ def admin_signup(body: SignupRequest):
     try:
         gym = supabase.table("gyms").insert({
             "name": body.gym_name,
-            "slug": body.gym_slug,
-            # pre-existing column on the live table, NOT NULL, no default —
-            # keep it in sync with slug until it's confirmed safe to drop
-            "signup_slug": body.gym_slug,
+            "slug": placeholder_slug,
+            # pre-existing column on the live table, NOT NULL, no default
+            "signup_slug": placeholder_slug,
         }).execute()
         gym_id = gym.data[0]["id"]
     except Exception as e:

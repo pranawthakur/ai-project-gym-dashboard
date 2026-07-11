@@ -68,9 +68,6 @@ button.submit:disabled { opacity:.6; cursor:not-allowed; transform:none; }
     <label class="lbl">Gym Name</label>
     <input type="text" id="signupGymName" required placeholder="Test Gym" />
 
-    <label class="lbl">Gym Slug</label>
-    <input type="text" id="signupGymSlug" required placeholder="testgym (used in URL)" />
-
     <label class="lbl">Admin Email</label>
     <input type="email" id="signupEmail" required placeholder="you@example.com" />
 
@@ -83,7 +80,7 @@ button.submit:disabled { opacity:.6; cursor:not-allowed; transform:none; }
 </div>
 
 <script>
-const API_BASE = "http://localhost:8001"; // change to deployed URL later
+const API_BASE = "https://ai-project-gym-dashboard.onrender.com";
 
 document.getElementById("toggleSignup").addEventListener("click", (e) => {
   e.preventDefault();
@@ -105,7 +102,6 @@ document.getElementById("signupForm").addEventListener("submit", async (e) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         gym_name: document.getElementById("signupGymName").value,
-        gym_slug: document.getElementById("signupGymSlug").value,
         admin_email: document.getElementById("signupEmail").value,
         admin_password: document.getElementById("signupPassword").value,
       }),
@@ -116,7 +112,7 @@ document.getElementById("signupForm").addEventListener("submit", async (e) => {
     localStorage.setItem("admin_token", data.access_token);
     localStorage.setItem("admin_role", data.role);
     localStorage.setItem("admin_gym_id", data.gym_id || "");
-    window.location.href = "/admin/dashboard-page";
+    window.location.href = "/dashboard.html";
   } catch (err) {
     errorMsg.textContent = err.message;
     errorMsg.style.display = "block";
@@ -150,7 +146,7 @@ document.getElementById("loginForm").addEventListener("submit", async (e) => {
     localStorage.setItem("admin_token", data.access_token);
     localStorage.setItem("admin_role", data.role);
     localStorage.setItem("admin_gym_id", data.gym_id || "");
-    window.location.href = "/admin/dashboard-page";
+    window.location.href = "/dashboard.html";
   } catch (err) {
     errorMsg.textContent = err.message;
     errorMsg.style.display = "block";
