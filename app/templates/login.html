@@ -59,10 +59,72 @@ button.submit:disabled { opacity:.6; cursor:not-allowed; transform:none; }
     <button type="submit" class="submit" id="submitBtn">Log In</button>
     <p class="error" id="errorMsg"></p>
   </form>
+
+  <p style="text-align:center; margin:16px 0 0; font-size:12px;">
+    <a href="#" id="toggleSignup" style="color:var(--muted); text-decoration:underline;">Dev only — create a test gym + admin</a>
+  </p>
+
+  <form id="signupForm" style="display:none; margin-top:8px; padding-top:18px; border-top:1px solid var(--border);">
+    <label class="lbl">Gym Name</label>
+    <input type="text" id="signupGymName" required placeholder="Test Gym" />
+
+    <label class="lbl">Gym Slug</label>
+    <input type="text" id="signupGymSlug" required placeholder="testgym (used in URL)" />
+
+    <label class="lbl">Admin Email</label>
+    <input type="email" id="signupEmail" required placeholder="you@example.com" />
+
+    <label class="lbl">Admin Password</label>
+    <input type="password" id="signupPassword" required placeholder="••••••••" />
+
+    <button type="submit" class="submit" id="signupBtn" style="background:transparent; border:1px solid var(--border); box-shadow:none;">Create Gym + Admin</button>
+    <p class="error" id="signupError"></p>
+  </form>
 </div>
 
 <script>
 const API_BASE = "http://localhost:8001"; // change to deployed URL later
+
+document.getElementById("toggleSignup").addEventListener("click", (e) => {
+  e.preventDefault();
+  const form = document.getElementById("signupForm");
+  form.style.display = form.style.display === "none" ? "block" : "none";
+});
+
+document.getElementById("signupForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById("signupBtn");
+  const errorMsg = document.getElementById("signupError");
+  errorMsg.style.display = "none";
+  btn.disabled = true;
+  btn.textContent = "Creating...";
+
+  try {
+    const res = await fetch(`${API_BASE}/admin/signup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        gym_name: document.getElementById("signupGymName").value,
+        gym_slug: document.getElementById("signupGymSlug").value,
+        admin_email: document.getElementById("signupEmail").value,
+        admin_password: document.getElementById("signupPassword").value,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Signup failed");
+
+    localStorage.setItem("admin_token", data.access_token);
+    localStorage.setItem("admin_role", data.role);
+    localStorage.setItem("admin_gym_id", data.gym_id || "");
+    window.location.href = "/admin/dashboard-page";
+  } catch (err) {
+    errorMsg.textContent = err.message;
+    errorMsg.style.display = "block";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Create Gym + Admin";
+  }
+});
 
 document.getElementById("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();

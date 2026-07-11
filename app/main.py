@@ -1,5 +1,6 @@
 import random
 import string
+from pathlib import Path
 
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -8,7 +9,7 @@ from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 
 from app.db import supabase
-from app.security import verify_password
+from app.security import verify_password, hash_password
 from app.auth import create_token, require_role, get_current_admin
 
 app = FastAPI(title="Gym Admin Dashboard (standalone)")
@@ -21,7 +22,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-templates = Jinja2Templates(directory="app/templates")
+TEMPLATES_DIR = Path(__file__).parent / "templates"
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 
 @app.get("/health")
@@ -62,6 +64,43 @@ def admin_login(body: LoginRequest):
 
     token = create_token(sub=admin["id"], role=admin["role"], gym_id=admin.get("gym_id"))
     return {"access_token": token, "role": admin["role"], "gym_id": admin.get("gym_id")}
+
+
+# ── DEV-ONLY signup — creates a gym + first admin in one step.
+# Delete this route before this ever goes near real users; it has no
+# invite/approval gate, anyone with the URL can create a gym admin account.
+class SignupRequest(BaseModel):
+    gym_name: str
+    gym_slug: str
+    admin_email: str
+    admin_password: str
+
+
+@app.post("/admin/signup")
+def admin_signup(body: SignupRequest):
+    existing_slug = supabase.table("gyms").select("id").eq("slug", body.gym_slug).execute()
+    if existing_slug.data:
+        raise HTTPException(status_code=400, detail="That gym slug is already taken.")
+
+    existing_email = supabase.table("admins").select("id").eq("email", body.admin_email).execute()
+    if existing_email.data:
+        raise HTTPException(status_code=400, detail="That email is already registered.")
+
+    gym = supabase.table("gyms").insert({
+        "name": body.gym_name,
+        "slug": body.gym_slug,
+    }).execute()
+    gym_id = gym.data[0]["id"]
+
+    admin = supabase.table("admins").insert({
+        "gym_id": gym_id,
+        "email": body.admin_email,
+        "password_hash": hash_password(body.admin_password),
+        "role": "gym_admin",
+    }).execute()
+
+    token = create_token(sub=admin.data[0]["id"], role="gym_admin", gym_id=gym_id)
+    return {"access_token": token, "role": "gym_admin", "gym_id": gym_id}
 
 
 # ── Dashboard (stub numbers for now — wire to real counts once members exist) ──
