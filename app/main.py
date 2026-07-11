@@ -91,9 +91,10 @@ class SignupRequest(BaseModel):
 def admin_signup(body: SignupRequest):
     try:
         existing_slug = supabase.table("gyms").select("id").eq("slug", body.gym_slug).execute()
+        existing_signup_slug = supabase.table("gyms").select("id").eq("signup_slug", body.gym_slug).execute()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"gyms.slug lookup failed: {e}")
-    if existing_slug.data:
+        raise HTTPException(status_code=500, detail=f"gyms slug lookup failed: {e}")
+    if existing_slug.data or existing_signup_slug.data:
         raise HTTPException(status_code=400, detail="That gym slug is already taken.")
 
     try:
@@ -107,6 +108,9 @@ def admin_signup(body: SignupRequest):
         gym = supabase.table("gyms").insert({
             "name": body.gym_name,
             "slug": body.gym_slug,
+            # pre-existing column on the live table, NOT NULL, no default —
+            # keep it in sync with slug until it's confirmed safe to drop
+            "signup_slug": body.gym_slug,
         }).execute()
         gym_id = gym.data[0]["id"]
     except Exception as e:
