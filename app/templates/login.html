@@ -3,158 +3,557 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Gym Admin Login — GymCoach Studio</title>
+<title>Gym Admin Dashboard — GymCoach Studio</title>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root {
   --bg: #0a0714; --fg: #f8fafc; --muted: #94a3b8; --card: #150f24;
   --border: rgba(139,92,246,.18); --primary: #a855f7; --primary-2: #6366f1;
-  --danger: #f87171; --success: #4ade80;
+  --danger: #f87171; --success: #4ade80; --warn: #fbbf24;
   --grad-primary: linear-gradient(135deg, #a855f7, #6366f1);
   --grad-hero: linear-gradient(135deg, #a855f7 0%, #8b5cf6 45%, #6366f1 100%);
   --grad-heading: linear-gradient(135deg, #c084fc, #818cf8);
   --shadow-glow: 0 18px 50px -18px rgba(139,92,246,.55);
   --shadow-card: 0 12px 40px -22px rgba(0,0,0,.6);
   --radius: 16px;
+  --sidebar-w: 232px;
 }
 * { box-sizing: border-box; }
-body { margin:0; font-family:'Inter',system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--fg); min-height:100vh; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; }
+body { margin:0; font-family:'Inter',system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--fg); min-height:100vh; position:relative; overflow-x:hidden; }
 .blobs { position:fixed; inset:0; z-index:-1; overflow:hidden; pointer-events:none; }
 .blob { position:absolute; border-radius:50%; filter:blur(80px); }
-.blob.a { width:380px; height:380px; top:-90px; left:-90px; background:var(--grad-hero); opacity:.28; animation:float1 14s ease-in-out infinite; }
-.blob.b { width:460px; height:460px; top:160px; right:-130px; background:var(--grad-primary); opacity:.2; animation:float2 18s ease-in-out infinite; }
-@keyframes float1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(14px,-26px)} }
-@keyframes float2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-18px,22px)} }
+.blob.a { width:380px; height:380px; top:-90px; left:-90px; background:var(--grad-hero); opacity:.22; }
+.blob.b { width:460px; height:460px; top:160px; right:-130px; background:var(--grad-primary); opacity:.16; }
 @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
-.card { width:100%; max-width:380px; background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:32px 28px; box-shadow:var(--shadow-card); animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; }
-.logo { display:flex; align-items:center; gap:10px; margin-bottom:22px; }
-.logo-icon { width:38px; height:38px; border-radius:10px; background:var(--grad-primary); display:flex; align-items:center; justify-content:center; font-size:18px; box-shadow:0 8px 22px -8px rgba(139,92,246,.6); }
-.logo b { font-family:'Baloo 2',cursive; font-weight:800; font-size:18px; }
-h1 { font-size:1.4rem; font-weight:800; margin:0 0 4px; background:var(--grad-heading); -webkit-background-clip:text; background-clip:text; color:transparent; }
-p.sub { color:var(--muted); font-size:13px; margin:0 0 22px; }
-label.lbl { display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:6px; margin-top:14px; }
-input { width:100%; padding:10px 12px; font-size:14px; color:var(--fg); border:1px solid var(--border); border-radius:10px; background:#0f0a1c; outline:none; transition:border-color .2s, box-shadow .2s; font-family:inherit; }
-input:focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(168,85,247,.2); }
-button.submit { width:100%; margin-top:22px; padding:11px; border:none; border-radius:10px; background:var(--grad-primary); color:#fff; font-weight:700; font-size:14px; cursor:pointer; box-shadow:var(--shadow-glow); transition:transform .15s; }
-button.submit:hover { transform:translateY(-1px); }
-button.submit:disabled { opacity:.6; cursor:not-allowed; transform:none; }
-.error { color:var(--danger); font-size:13px; margin-top:12px; display:none; }
+
+.topnav { display:flex; align-items:center; justify-content:space-between; padding:16px 24px; border-bottom:1px solid var(--border); }
+.topnav .logo { display:flex; align-items:center; gap:10px; font-weight:800; font-size:17px; }
+.logo-icon { width:34px; height:34px; border-radius:10px; background:var(--grad-primary); display:flex; align-items:center; justify-content:center; font-size:16px; }
+.hamburger { background:none; border:1px solid var(--border); color:var(--fg); width:36px; height:36px; border-radius:10px; cursor:pointer; font-size:16px; margin-right:8px; }
+.hamburger:hover { border-color:rgba(139,92,246,.4); }
+.logout-btn { background:none; border:1px solid var(--border); color:var(--muted); padding:8px 16px; border-radius:10px; cursor:pointer; font-size:13px; font-weight:600; }
+.logout-btn:hover { color:var(--fg); border-color:rgba(139,92,246,.4); }
+
+.layout { display:flex; }
+
+/* ── Sidebar ────────────────────────────────────────────────────── */
+.sidebar { width:var(--sidebar-w); flex-shrink:0; border-right:1px solid var(--border); padding:20px 12px; min-height:calc(100vh - 68px); transition:margin-left .25s ease, opacity .2s ease; }
+.sidebar.collapsed { margin-left:calc(-1 * var(--sidebar-w)); opacity:0; pointer-events:none; }
+.sidebar-section { margin-bottom:22px; }
+.sidebar-section .sec-label { font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); font-weight:700; padding:0 10px; margin-bottom:8px; }
+.nav-item { display:flex; align-items:center; gap:10px; width:100%; text-align:left; background:none; border:none; color:var(--muted); padding:9px 10px; border-radius:10px; font-size:13.5px; font-weight:600; cursor:pointer; font-family:inherit; }
+.nav-item:hover { background:rgba(139,92,246,.08); color:var(--fg); }
+.nav-item.active { background:rgba(139,92,246,.16); color:#c4b5fd; }
+
+.main { flex:1; min-width:0; }
+.wrap { max-width:1100px; margin:0 auto; padding:28px 20px 60px; }
+h1 { font-family:'Baloo 2',cursive; font-size:1.8rem; font-weight:800; margin:0 0 20px; background:var(--grad-heading); -webkit-background-clip:text; background-clip:text; color:transparent; }
+
+.view { display:none; }
+.view.active { display:block; }
+
+.stats-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:32px; }
+@media (max-width:700px) { .stats-grid { grid-template-columns:repeat(2,1fr); } }
+.stat-card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:18px; animation:fadeUp .5s cubic-bezier(.16,1,.3,1) both; }
+.stat-card .num { font-size:1.6rem; font-weight:800; color:#c4b5fd; }
+.stat-card .label { font-size:12px; color:var(--muted); font-weight:600; margin-top:4px; }
+
+.card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:22px; margin-bottom:24px; box-shadow:var(--shadow-card); animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; }
+.card-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; gap:12px; flex-wrap:wrap; }
+.card-head h3 { margin:0; font-size:1rem; }
+
+.grid.c3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+.grid.c2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+@media (max-width:600px) { .grid.c3, .grid.c2 { grid-template-columns:1fr; } }
+label.lbl { display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:6px; }
+input, select { width:100%; padding:9px 12px; font-size:14px; color:var(--fg); border:1px solid var(--border); border-radius:10px; background:#0f0a1c; outline:none; font-family:inherit; }
+input:focus, select:focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(168,85,247,.2); }
+button.primary { padding:9px 18px; border:none; border-radius:10px; background:var(--grad-primary); color:#fff; font-weight:700; font-size:13px; cursor:pointer; box-shadow:var(--shadow-glow); }
+button.primary:disabled { opacity:.6; cursor:not-allowed; }
+button.ghost { padding:8px 14px; border:1px solid var(--border); border-radius:9px; background:none; color:var(--fg); font-weight:600; font-size:12.5px; cursor:pointer; }
+button.ghost:hover { border-color:rgba(139,92,246,.4); }
+button.ghost.danger { color:var(--danger); border-color:rgba(248,113,113,.3); }
+button.ghost.danger:hover { border-color:var(--danger); }
+button.ghost.warn { color:var(--warn); border-color:rgba(251,191,36,.3); }
+button.ghost.small { padding:5px 10px; font-size:11.5px; }
+
+.code-result { display:none; margin-top:14px; background:rgba(74,222,128,.1); border:1px solid rgba(74,222,128,.35); border-radius:10px; padding:12px 16px; font-size:13px; }
+.code-result b { color:var(--success); font-size:1.1rem; letter-spacing:2px; }
+.banner { display:none; margin-bottom:16px; border-radius:10px; padding:12px 16px; font-size:13px; }
+.banner.ok { background:rgba(74,222,128,.1); border:1px solid rgba(74,222,128,.35); }
+.banner.err { background:rgba(248,113,113,.1); border:1px solid rgba(248,113,113,.35); color:var(--danger); }
+
+.filters { display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+.filters input { max-width:280px; }
+.filters select { max-width:160px; }
+
+table { width:100%; border-collapse:collapse; font-size:13px; }
+th { text-align:left; color:var(--muted); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
+td { padding:10px; border-bottom:1px solid var(--border); vertical-align:middle; }
+tr:hover td { background:rgba(139,92,246,.05); }
+.code-pill { font-family:monospace; background:#0f0a1c; padding:3px 8px; border-radius:6px; letter-spacing:1px; }
+.status-pill { font-size:11px; font-weight:700; padding:3px 9px; border-radius:999px; }
+.status-pill.active { background:rgba(74,222,128,.15); color:var(--success); }
+.status-pill.suspended { background:rgba(248,113,113,.15); color:var(--danger); }
+.empty { color:var(--muted); font-size:13px; text-align:center; padding:20px; }
+.row-actions { display:flex; gap:6px; flex-wrap:wrap; }
+
+/* ── Modal ──────────────────────────────────────────────────────── */
+.modal-backdrop { display:none; position:fixed; inset:0; background:rgba(5,3,10,.7); z-index:50; align-items:center; justify-content:center; padding:20px; }
+.modal-backdrop.open { display:flex; }
+.modal { width:100%; max-width:440px; background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:24px; box-shadow:var(--shadow-glow); }
+.modal h3 { margin:0 0 4px; font-size:1.05rem; }
+.modal .sub { color:var(--muted); font-size:12.5px; margin-bottom:18px; }
+.modal-close { float:right; background:none; border:none; color:var(--muted); font-size:18px; cursor:pointer; }
+.modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:18px; }
 </style>
 </head>
 <body>
 <div class="blobs"><div class="blob a"></div><div class="blob b"></div></div>
 
-<div class="card">
-  <div class="logo"><div class="logo-icon">🏋</div><b>GymCoach Studio</b></div>
-  <h1>Gym Admin Login</h1>
-  <p class="sub">Sign in to manage your gym.</p>
+<div class="topnav">
+  <div style="display:flex; align-items:center;">
+    <button class="hamburger" id="sidebarToggle" title="Toggle navigation">☰</button>
+    <div class="logo"><div class="logo-icon">🏋</div>GymCoach Studio — Admin</div>
+  </div>
+  <button class="logout-btn" onclick="logout()">Log Out</button>
+</div>
 
-  <form id="loginForm">
-    <label class="lbl">Email</label>
-    <input type="email" id="email" required placeholder="admin@yourgym.com" />
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-section">
+      <button class="nav-item active" data-view="viewDashboard">📊 Dashboard</button>
+    </div>
+    <div class="sidebar-section">
+      <div class="sec-label">Member Management</div>
+      <button class="nav-item" data-view="viewMembers">👥 Search &amp; Filter</button>
+      <button class="nav-item" data-view="viewMembers">✏️ Edit / Suspend / Delete</button>
+      <button class="nav-item" data-view="viewMembers">🔑 Regenerate Login Code</button>
+      <button class="nav-item" data-view="viewMembers">🤖 Reset AI Credits</button>
+      <button class="nav-item" data-view="viewMembers">📜 View AI History</button>
+    </div>
+    <div class="sidebar-section">
+      <div class="sec-label">Membership Payment</div>
+      <button class="nav-item" data-view="viewMembers">💳 Mark As Paid</button>
+    </div>
+    <div class="sidebar-section">
+      <div class="sec-label">Export</div>
+      <button class="nav-item" id="navExport">⬇️ Download Excel</button>
+    </div>
+  </nav>
 
-    <label class="lbl">Password</label>
-    <input type="password" id="password" required placeholder="••••••••" />
+  <main class="main">
+    <div class="wrap">
 
-    <button type="submit" class="submit" id="submitBtn">Log In</button>
-    <p class="error" id="errorMsg"></p>
-  </form>
+      <!-- ── Dashboard view ─────────────────────────────────────── -->
+      <div class="view active" id="viewDashboard">
+        <h1>Dashboard</h1>
 
-  <p style="text-align:center; margin:16px 0 0; font-size:12px;">
-    <a href="#" id="toggleSignup" style="color:var(--muted); text-decoration:underline;">Dev only — create a test gym + admin</a>
-  </p>
+        <div class="stats-grid" id="statsGrid">
+          <div class="stat-card"><div class="num" id="statTotalMembers">—</div><div class="label">Total Members</div></div>
+          <div class="stat-card"><div class="num" id="statTodayLogins">—</div><div class="label">Today's Logins</div></div>
+          <div class="stat-card"><div class="num" id="statActive">—</div><div class="label">Active Members</div></div>
+          <div class="stat-card"><div class="num" id="statExpiring">—</div><div class="label">Expiring Memberships</div></div>
+          <div class="stat-card"><div class="num" id="statPending">—</div><div class="label">Pending Renewals</div></div>
+          <div class="stat-card"><div class="num" id="statRevenue">—</div><div class="label">Today's Revenue</div></div>
+        </div>
 
-  <form id="signupForm" style="display:none; margin-top:8px; padding-top:18px; border-top:1px solid var(--border);">
-    <label class="lbl">Gym Name</label>
-    <input type="text" id="signupGymName" required placeholder="Test Gym" />
+        <div class="card">
+          <div class="card-head"><h3>Add Member</h3></div>
+          <form id="addMemberForm" class="grid c3">
+            <div>
+              <label class="lbl">Name</label>
+              <input type="text" id="memberName" required placeholder="Full name" />
+            </div>
+            <div>
+              <label class="lbl">Phone Number</label>
+              <input type="tel" id="memberPhone" required placeholder="9999999999" />
+            </div>
+            <div>
+              <label class="lbl">Email (Optional)</label>
+              <input type="email" id="memberEmail" placeholder="member@example.com" />
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <button type="submit" class="primary" id="addMemberBtn">Save Member</button>
+            </div>
+          </form>
+          <div class="code-result" id="codeResult">
+            Login code generated: <b id="codeValue"></b>
+          </div>
+        </div>
+      </div>
 
-    <label class="lbl">Admin Email</label>
-    <input type="email" id="signupEmail" required placeholder="you@example.com" />
+      <!-- ── Member Management view ─────────────────────────────── -->
+      <div class="view" id="viewMembers">
+        <h1>Member Management</h1>
 
-    <label class="lbl">Admin Password</label>
-    <input type="password" id="signupPassword" required placeholder="••••••••" />
+        <div class="banner" id="membersBanner"></div>
 
-    <button type="submit" class="submit" id="signupBtn" style="background:transparent; border:1px solid var(--border); box-shadow:none;">Create Gym + Admin</button>
-    <p class="error" id="signupError"></p>
-  </form>
+        <div class="card">
+          <div class="card-head">
+            <h3>Members</h3>
+            <button class="ghost" onclick="downloadExport()">⬇️ Export Excel</button>
+          </div>
+
+          <div class="filters">
+            <input type="text" id="searchInput" placeholder="Search by name or phone number…" oninput="renderMembersTable()" />
+            <select id="statusFilter" onchange="loadMembers()">
+              <option value="">All statuses</option>
+              <option value="active">Active</option>
+              <option value="suspended">Suspended</option>
+            </select>
+          </div>
+
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Phone</th><th>Login Code</th><th>Status</th><th>Expiry</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="membersTableBody">
+              <tr><td colspan="6" class="empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- ── Edit Member Modal ─────────────────────────────────────────── -->
+<div class="modal-backdrop" id="editModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('editModal')">✕</button>
+    <h3>Edit Member</h3>
+    <div class="sub">Leave a field blank to keep it unchanged.</div>
+    <div class="grid c2" style="grid-template-columns:1fr;">
+      <div><label class="lbl">Name</label><input type="text" id="editName" /></div>
+      <div><label class="lbl">Phone</label><input type="tel" id="editPhone" /></div>
+      <div><label class="lbl">Email</label><input type="email" id="editEmail" /></div>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost" onclick="closeModal('editModal')">Cancel</button>
+      <button class="primary" id="editSaveBtn" onclick="submitEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Mark As Paid Modal ────────────────────────────────────────── -->
+<div class="modal-backdrop" id="payModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('payModal')">✕</button>
+    <h3>Mark As Paid</h3>
+    <div class="sub" id="paySub">Record a membership payment.</div>
+    <div class="grid c2">
+      <div><label class="lbl">Amount (₹)</label><input type="number" id="payAmount" min="0" step="1" /></div>
+      <div><label class="lbl">Months</label><input type="number" id="payMonths" min="1" step="1" value="1" /></div>
+      <div><label class="lbl">Plan</label><input type="text" id="payPlan" placeholder="e.g. Standard" /></div>
+      <div>
+        <label class="lbl">Payment Method</label>
+        <select id="payMethod">
+          <option>Cash</option><option>UPI</option><option>Card</option><option>Bank Transfer</option>
+        </select>
+      </div>
+      <div style="grid-column:1/-1;"><label class="lbl">Transaction ID (optional)</label><input type="text" id="payTxnId" /></div>
+    </div>
+    <div class="sub" style="margin-top:10px;">Invoice PDF + WhatsApp send aren't wired up yet — payment will still save and update the expiry date.</div>
+    <div class="modal-actions">
+      <button class="ghost" onclick="closeModal('payModal')">Cancel</button>
+      <button class="primary" id="paySaveBtn" onclick="submitPayment()">Save Payment</button>
+    </div>
+  </div>
 </div>
 
 <script>
 const API_BASE = "https://ai-project-gym-dashboard.onrender.com";
+const token = localStorage.getItem("admin_token");
 
-document.getElementById("toggleSignup").addEventListener("click", (e) => {
-  e.preventDefault();
-  const form = document.getElementById("signupForm");
-  form.style.display = form.style.display === "none" ? "block" : "none";
+if (!token) window.location.href = "/login.html";
+
+function authHeaders() {
+  return { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" };
+}
+
+function logout() {
+  localStorage.removeItem("admin_token");
+  localStorage.removeItem("admin_role");
+  localStorage.removeItem("admin_gym_id");
+  window.location.href = "/login.html";
+}
+
+// ── Sidebar toggle ──────────────────────────────────────────────
+document.getElementById("sidebarToggle").addEventListener("click", () => {
+  document.getElementById("sidebar").classList.toggle("collapsed");
 });
 
-document.getElementById("signupForm").addEventListener("submit", async (e) => {
+// ── View switching ──────────────────────────────────────────────
+document.querySelectorAll(".nav-item[data-view]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".nav-item[data-view]").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+    document.getElementById(btn.dataset.view).classList.add("active");
+    if (btn.dataset.view === "viewMembers") loadMembers();
+  });
+});
+document.getElementById("navExport").addEventListener("click", downloadExport);
+
+// ── Dashboard stats ─────────────────────────────────────────────
+async function loadDashboard() {
+  const res = await fetch(`${API_BASE}/admin/dashboard`, { headers: authHeaders() });
+  if (res.status === 401 || res.status === 403) return logout();
+  const data = await res.json();
+  document.getElementById("statTotalMembers").textContent = data.total_members;
+  document.getElementById("statTodayLogins").textContent = data.todays_logins;
+  document.getElementById("statActive").textContent = data.active_members;
+  document.getElementById("statExpiring").textContent = data.expiring_memberships;
+  document.getElementById("statPending").textContent = data.pending_renewals;
+  document.getElementById("statRevenue").textContent = "₹" + data.todays_revenue;
+}
+
+// ── Members list, search, filter ────────────────────────────────
+let allMembers = [];
+
+async function loadMembers() {
+  const status = document.getElementById("statusFilter").value;
+  const url = new URL(`${API_BASE}/admin/members`);
+  if (status) url.searchParams.set("status", status);
+
+  const res = await fetch(url, { headers: authHeaders() });
+  if (res.status === 401 || res.status === 403) return logout();
+  const data = await res.json();
+  allMembers = data.members || [];
+  renderMembersTable();
+}
+
+function renderMembersTable() {
+  const search = document.getElementById("searchInput").value.trim().toLowerCase();
+  let members = allMembers;
+  if (search) {
+    members = members.filter(m =>
+      (m.name || "").toLowerCase().includes(search) ||
+      (m.phone || "").includes(search)
+    );
+  }
+
+  const tbody = document.getElementById("membersTableBody");
+  if (!members.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty">No members match — add one from the Dashboard tab or adjust filters.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = members.map(m => `
+    <tr>
+      <td>${escapeHtml(m.name || "")}</td>
+      <td>${escapeHtml(m.phone || "")}</td>
+      <td><span class="code-pill">${escapeHtml(m.login_code || "")}</span></td>
+      <td><span class="status-pill ${m.status === 'active' ? 'active' : 'suspended'}">${escapeHtml(m.status || "")}</span></td>
+      <td>${m.expiry_date ? escapeHtml(m.expiry_date) : "—"}</td>
+      <td>
+        <div class="row-actions">
+          <button class="ghost small" onclick="openEdit('${m.id}')">Edit</button>
+          ${m.status === 'active'
+            ? `<button class="ghost small warn" onclick="suspendMember('${m.id}')">Suspend</button>`
+            : `<button class="ghost small" onclick="reactivateMember('${m.id}')">Reactivate</button>`}
+          <button class="ghost small danger" onclick="deleteMember('${m.id}', '${escapeHtml(m.name || '')}')">Delete</button>
+          <button class="ghost small" onclick="regenerateCode('${m.id}')">Regen Code</button>
+          <button class="ghost small" onclick="openPay('${m.id}', '${escapeHtml(m.name || '')}')">Mark Paid</button>
+          <button class="ghost small" onclick="notWiredUp('Reset AI Credits')">Reset AI Credits</button>
+          <button class="ghost small" onclick="notWiredUp('View AI History')">AI History</button>
+        </div>
+      </td>
+    </tr>
+  `).join("");
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+
+function notWiredUp(feature) {
+  showBanner("err", `${feature} isn't wired up yet — it depends on the AI engine in the member-facing app, not built in this dashboard.`);
+}
+
+function showBanner(type, message) {
+  const el = document.getElementById("membersBanner");
+  el.className = `banner ${type}`;
+  el.textContent = message;
+  el.style.display = "block";
+  setTimeout(() => { el.style.display = "none"; }, 5000);
+}
+
+// ── Suspend / Reactivate / Delete / Regenerate ──────────────────
+async function suspendMember(id) {
+  const res = await fetch(`${API_BASE}/admin/members/${id}/suspend`, { method: "POST", headers: authHeaders() });
+  const data = await res.json();
+  if (!res.ok) return showBanner("err", data.detail || "Could not suspend member");
+  showBanner("ok", "Member suspended.");
+  await loadMembers(); await loadDashboard();
+}
+
+async function reactivateMember(id) {
+  const res = await fetch(`${API_BASE}/admin/members/${id}/reactivate`, { method: "POST", headers: authHeaders() });
+  const data = await res.json();
+  if (!res.ok) return showBanner("err", data.detail || "Could not reactivate member");
+  showBanner("ok", "Member reactivated.");
+  await loadMembers(); await loadDashboard();
+}
+
+async function deleteMember(id, name) {
+  if (!confirm(`Delete ${name || "this member"}? This can't be undone.`)) return;
+  const res = await fetch(`${API_BASE}/admin/members/${id}`, { method: "DELETE", headers: authHeaders() });
+  const data = await res.json();
+  if (!res.ok) return showBanner("err", data.detail || "Could not delete member");
+  showBanner("ok", "Member deleted.");
+  await loadMembers(); await loadDashboard();
+}
+
+async function regenerateCode(id) {
+  const res = await fetch(`${API_BASE}/admin/members/${id}/regenerate-code`, { method: "POST", headers: authHeaders() });
+  const data = await res.json();
+  if (!res.ok) return showBanner("err", data.detail || "Could not regenerate code");
+  showBanner("ok", `New login code: ${data.login_code}`);
+  await loadMembers();
+}
+
+// ── Edit modal ───────────────────────────────────────────────────
+let editingId = null;
+function openEdit(id) {
+  const m = allMembers.find(x => x.id === id);
+  if (!m) return;
+  editingId = id;
+  document.getElementById("editName").value = "";
+  document.getElementById("editPhone").value = "";
+  document.getElementById("editEmail").value = "";
+  document.getElementById("editName").placeholder = m.name || "";
+  document.getElementById("editPhone").placeholder = m.phone || "";
+  document.getElementById("editEmail").placeholder = m.email || "";
+  openModal("editModal");
+}
+
+async function submitEdit() {
+  const btn = document.getElementById("editSaveBtn");
+  const body = {};
+  const name = document.getElementById("editName").value.trim();
+  const phone = document.getElementById("editPhone").value.trim();
+  const email = document.getElementById("editEmail").value.trim();
+  if (name) body.name = name;
+  if (phone) body.phone = phone;
+  if (email) body.email = email;
+
+  if (!Object.keys(body).length) { closeModal("editModal"); return; }
+
+  btn.disabled = true; btn.textContent = "Saving...";
+  try {
+    const res = await fetch(`${API_BASE}/admin/members/${editingId}`, {
+      method: "PATCH", headers: authHeaders(), body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Could not update member");
+    closeModal("editModal");
+    showBanner("ok", "Member updated.");
+    await loadMembers();
+  } catch (err) {
+    showBanner("err", err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "Save Changes";
+  }
+}
+
+// ── Payment modal ─────────────────────────────────────────────────
+let payingId = null;
+function openPay(id, name) {
+  payingId = id;
+  document.getElementById("paySub").textContent = `Recording a payment for ${name || "this member"}.`;
+  document.getElementById("payAmount").value = "";
+  document.getElementById("payMonths").value = "1";
+  document.getElementById("payPlan").value = "";
+  document.getElementById("payTxnId").value = "";
+  openModal("payModal");
+}
+
+async function submitPayment() {
+  const btn = document.getElementById("paySaveBtn");
+  const amount = parseFloat(document.getElementById("payAmount").value);
+  const months = parseInt(document.getElementById("payMonths").value, 10);
+  const plan = document.getElementById("payPlan").value.trim();
+  const payment_method = document.getElementById("payMethod").value;
+  const transaction_id = document.getElementById("payTxnId").value.trim() || null;
+
+  if (!amount || !months || !plan) {
+    showBanner("err", "Amount, months, and plan are required.");
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = "Saving...";
+  try {
+    const res = await fetch(`${API_BASE}/admin/members/${payingId}/payments`, {
+      method: "POST", headers: authHeaders(),
+      body: JSON.stringify({ amount, months, plan, payment_method, transaction_id }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Could not save payment");
+    closeModal("payModal");
+    showBanner("ok", `Payment saved. New expiry date: ${data.new_expiry_date}.`);
+    await loadMembers(); await loadDashboard();
+  } catch (err) {
+    showBanner("err", err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "Save Payment";
+  }
+}
+
+// ── Modal helpers ───────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add("open"); }
+function closeModal(id) { document.getElementById(id).classList.remove("open"); }
+
+// ── Export ───────────────────────────────────────────────────────
+async function downloadExport() {
+  const res = await fetch(`${API_BASE}/admin/export/members`, { headers: authHeaders() });
+  if (!res.ok) { showBanner("err", "Export failed."); return; }
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "members_export.xlsx";
+  document.body.appendChild(a); a.click(); a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+// ── Add Member ───────────────────────────────────────────────────
+document.getElementById("addMemberForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const btn = document.getElementById("signupBtn");
-  const errorMsg = document.getElementById("signupError");
-  errorMsg.style.display = "none";
+  const btn = document.getElementById("addMemberBtn");
   btn.disabled = true;
-  btn.textContent = "Creating...";
+  btn.textContent = "Saving...";
 
   try {
-    const res = await fetch(`${API_BASE}/admin/signup`, {
+    const res = await fetch(`${API_BASE}/admin/members`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders(),
       body: JSON.stringify({
-        gym_name: document.getElementById("signupGymName").value,
-        admin_email: document.getElementById("signupEmail").value,
-        admin_password: document.getElementById("signupPassword").value,
+        name: document.getElementById("memberName").value,
+        phone: document.getElementById("memberPhone").value,
+        email: document.getElementById("memberEmail").value || null,
       }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Signup failed");
+    if (!res.ok) throw new Error(data.detail || "Could not add member");
 
-    localStorage.setItem("admin_token", data.access_token);
-    localStorage.setItem("admin_role", data.role);
-    localStorage.setItem("admin_gym_id", data.gym_id || "");
-    window.location.href = "/dashboard.html";
+    document.getElementById("codeValue").textContent = data.login_code;
+    document.getElementById("codeResult").style.display = "block";
+    document.getElementById("addMemberForm").reset();
+
+    await loadMembers();
+    await loadDashboard();
   } catch (err) {
-    errorMsg.textContent = err.message;
-    errorMsg.style.display = "block";
+    alert(err.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = "Create Gym + Admin";
+    btn.textContent = "Save Member";
   }
 });
 
-document.getElementById("loginForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const btn = document.getElementById("submitBtn");
-  const errorMsg = document.getElementById("errorMsg");
-  errorMsg.style.display = "none";
-  btn.disabled = true;
-  btn.textContent = "Logging in...";
-
-  try {
-    const res = await fetch(`${API_BASE}/admin/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: document.getElementById("email").value,
-        password: document.getElementById("password").value,
-      }),
-    });
-    const data = await res.json();
-
-    if (!res.ok) throw new Error(data.detail || "Login failed");
-
-    localStorage.setItem("admin_token", data.access_token);
-    localStorage.setItem("admin_role", data.role);
-    localStorage.setItem("admin_gym_id", data.gym_id || "");
-    window.location.href = "/dashboard.html";
-  } catch (err) {
-    errorMsg.textContent = err.message;
-    errorMsg.style.display = "block";
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "Log In";
-  }
-});
+loadDashboard();
+loadMembers();
 </script>
 </body>
 </html>
