@@ -4,7 +4,7 @@ import io
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, Depends, HTTPException, Request, Header
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -85,10 +85,9 @@ def admin_login(body: LoginRequest):
 
 
 # ── DEV-ONLY signup — creates a gym + first admin in one step.
-# Gated by a shared secret header (X-Signup-Secret) so it's not wide
-# open on the internet. Set SIGNUP_SECRET in Render env vars to a real
-# value. Still not a real invite/approval system — delete or replace
-# this route before onboarding real gym customers.
+# NOTE: secret-header gate removed for now (demo/solo use only). Before
+# any real user other than you can reach this URL, put a gate back here —
+# right now anyone with the link can create unlimited gyms/admins.
 class SignupRequest(BaseModel):
     gym_name: str
     admin_email: str
@@ -103,10 +102,7 @@ def generate_placeholder_slug() -> str:
 
 
 @app.post("/admin/signup")
-def admin_signup(body: SignupRequest, x_signup_secret: str | None = Header(default=None)):
-    if x_signup_secret != settings.signup_secret:
-        raise HTTPException(status_code=403, detail="Signup is locked. Missing or wrong X-Signup-Secret header.")
-
+def admin_signup(body: SignupRequest):
     placeholder_slug = generate_placeholder_slug()
 
     try:
