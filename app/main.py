@@ -1,16 +1,20 @@
 import random
 import string
+import io
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, Depends, HTTPException, Request, Header
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
+from openpyxl import Workbook
 
 from app.db import supabase
 from app.security import verify_password, hash_password
 from app.auth import create_token, require_role, get_current_admin
+from app.config import settings
 
 app = FastAPI(title="Gym Admin Dashboard (standalone)")
 
@@ -78,8 +82,10 @@ def admin_login(body: LoginRequest):
 
 
 # ── DEV-ONLY signup — creates a gym + first admin in one step.
-# Delete this route before this ever goes near real users; it has no
-# invite/approval gate, anyone with the URL can create a gym admin account.
+# Gated by a shared secret header (X-Signup-Secret) so it's not wide
+# open on the internet. Set SIGNUP_SECRET in Render env vars to a real
+# value. Still not a real invite/approval system — delete or replace
+# this route before onboarding real gym customers.
 class SignupRequest(BaseModel):
     gym_name: str
     admin_email: str
@@ -94,7 +100,10 @@ def generate_placeholder_slug() -> str:
 
 
 @app.post("/admin/signup")
-def admin_signup(body: SignupRequest):
+def admin_signup(body: SignupRequest, x_signup_secret: str | None = Header(default=None)):
+    if x_signup_secret != settings.signup_secret:
+        raise HTTPException(status_code=403, detail="Signup is locked. Missing or wrong X-Signup-Secret header.")
+
     placeholder_slug = generate_placeholder_slug()
 
     try:
@@ -129,22 +138,44 @@ def admin_signup(body: SignupRequest):
     return {"access_token": token, "role": "gym_admin", "gym_id": gym_id}
 
 
-# ── Dashboard (stub numbers for now — wire to real counts once members exist) ──
+# ── Dashboard ────────────────────────────────────────────────────────────
 @app.get("/admin/dashboard")
 def dashboard(admin: dict = Depends(require_role("gym_admin"))):
     gym_id = admin["gym_id"]
 
     members = supabase.table("members").select("id", count="exact").eq("gym_id", gym_id).execute()
 
+    active_members = supabase.table("members").select("id", count="exact") \
+        .eq("gym_id", gym_id).eq("status", "active").execute()
+
+    today = datetime.now(timezone.utc).date()
+    week_out = today + timedelta(days=7)
+    try:
+        expiring = supabase.table("members").select("id", count="exact") \
+            .eq("gym_id", gym_id).gte("expiry_date", today.isoformat()) \
+            .lte("expiry_date", week_out.isoformat()).execute()
+        expiring_count = expiring.count or 0
+    except Exception:
+        # expiry_date column may not exist yet if payments haven't been wired up
+        expiring_count = 0
+
+    try:
+        todays_payments = supabase.table("payments").select("amount") \
+            .eq("gym_id", gym_id).gte("created_at", today.isoformat()).execute()
+        todays_revenue = sum(p["amount"] for p in todays_payments.data) if todays_payments.data else 0
+    except Exception:
+        # payments table may not exist yet
+        todays_revenue = 0
+
     return {
         "gym_id": gym_id,
         "total_members": members.count or 0,
-        # placeholders — fill in once payments/login-logs tables exist
+        "active_members": active_members.count or 0,
+        "expiring_memberships": expiring_count,
+        "todays_revenue": todays_revenue,
+        # not tracked yet — need a login-log table to populate these for real
         "todays_logins": 0,
-        "active_members": 0,
-        "expiring_memberships": 0,
         "pending_renewals": 0,
-        "todays_revenue": 0,
     }
 
 
@@ -186,9 +217,185 @@ def add_member(body: AddMemberRequest, admin: dict = Depends(require_role("gym_a
     return {"member": result.data[0], "login_code": code}
 
 
-# ── Member list (search/filter comes later, this is the base list) ─────────
+# ── Member list with search/filter ──────────────────────────────────────
 @app.get("/admin/members")
-def list_members(admin: dict = Depends(require_role("gym_admin"))):
+def list_members(
+    admin: dict = Depends(require_role("gym_admin")),
+    search: str | None = None,
+    status: str | None = None,
+):
+    gym_id = admin["gym_id"]
+    query = supabase.table("members").select("*").eq("gym_id", gym_id)
+
+    if status:
+        query = query.eq("status", status)
+
+    result = query.execute()
+    members = result.data or []
+
+    if search:
+        s = search.lower()
+        members = [
+            m for m in members
+            if s in (m.get("name") or "").lower()
+            or s in (m.get("phone") or "")
+            or s in (m.get("email") or "").lower()
+        ]
+
+    return {"members": members}
+
+
+# ── Edit member ──────────────────────────────────────────────────────────
+class EditMemberRequest(BaseModel):
+    name: str | None = None
+    phone: str | None = None
+    email: str | None = None
+
+
+@app.patch("/admin/members/{member_id}")
+def edit_member(member_id: str, body: EditMemberRequest, admin: dict = Depends(require_role("gym_admin"))):
+    gym_id = admin["gym_id"]
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update.")
+
+    result = supabase.table("members").update(updates).eq("id", member_id).eq("gym_id", gym_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Member not found in your gym.")
+    return {"member": result.data[0]}
+
+
+# ── Suspend / reactivate member ─────────────────────────────────────────
+@app.post("/admin/members/{member_id}/suspend")
+def suspend_member(member_id: str, admin: dict = Depends(require_role("gym_admin"))):
+    gym_id = admin["gym_id"]
+    result = supabase.table("members").update({"status": "suspended"}) \
+        .eq("id", member_id).eq("gym_id", gym_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Member not found in your gym.")
+    return {"member": result.data[0]}
+
+
+@app.post("/admin/members/{member_id}/reactivate")
+def reactivate_member(member_id: str, admin: dict = Depends(require_role("gym_admin"))):
+    gym_id = admin["gym_id"]
+    result = supabase.table("members").update({"status": "active"}) \
+        .eq("id", member_id).eq("gym_id", gym_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Member not found in your gym.")
+    return {"member": result.data[0]}
+
+
+# ── Delete member ────────────────────────────────────────────────────────
+@app.delete("/admin/members/{member_id}")
+def delete_member(member_id: str, admin: dict = Depends(require_role("gym_admin"))):
+    gym_id = admin["gym_id"]
+    result = supabase.table("members").delete().eq("id", member_id).eq("gym_id", gym_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Member not found in your gym.")
+    return {"deleted": True, "member_id": member_id}
+
+
+# ── Regenerate login code ───────────────────────────────────────────────
+@app.post("/admin/members/{member_id}/regenerate-code")
+def regenerate_code(member_id: str, admin: dict = Depends(require_role("gym_admin"))):
+    gym_id = admin["gym_id"]
+
+    existing_member = supabase.table("members").select("id").eq("id", member_id).eq("gym_id", gym_id).execute()
+    if not existing_member.data:
+        raise HTTPException(status_code=404, detail="Member not found in your gym.")
+
+    for _ in range(5):
+        code = generate_login_code()
+        clash = supabase.table("members").select("id").eq("login_code", code).execute()
+        if not clash.data:
+            break
+    else:
+        raise HTTPException(status_code=500, detail="Could not generate a unique code, try again.")
+
+    result = supabase.table("members").update({"login_code": code}).eq("id", member_id).execute()
+    # TODO: send new code via WhatsApp once messaging provider is wired up
+    return {"member": result.data[0], "login_code": code}
+
+
+# ── Membership Payment ──────────────────────────────────────────────────
+class MarkPaidRequest(BaseModel):
+    amount: float
+    plan: str
+    months: int
+    payment_method: str
+    transaction_id: str | None = None
+
+
+@app.post("/admin/members/{member_id}/payments")
+def mark_paid(member_id: str, body: MarkPaidRequest, admin: dict = Depends(require_role("gym_admin"))):
+    gym_id = admin["gym_id"]
+
+    member = supabase.table("members").select("id").eq("id", member_id).eq("gym_id", gym_id).execute()
+    if not member.data:
+        raise HTTPException(status_code=404, detail="Member not found in your gym.")
+
+    expiry_date = (datetime.now(timezone.utc) + timedelta(days=30 * body.months)).date().isoformat()
+
+    try:
+        payment = supabase.table("payments").insert({
+            "gym_id": gym_id,
+            "member_id": member_id,
+            "amount": body.amount,
+            "plan": body.plan,
+            "months": body.months,
+            "payment_method": body.payment_method,
+            "transaction_id": body.transaction_id,
+        }).execute()
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"payments insert failed (does the 'payments' table exist yet? see schema.sql): {e}"
+        )
+
+    try:
+        supabase.table("members").update({"expiry_date": expiry_date}).eq("id", member_id).execute()
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"member expiry_date update failed (does members.expiry_date exist yet?): {e}"
+        )
+
+    # TODO: generate invoice PDF (ReportLab/WeasyPrint) and send via WhatsApp
+    # once those providers are wired up — flagged in flowchart, not built yet.
+    return {"payment": payment.data[0], "new_expiry_date": expiry_date}
+
+
+# ── Export members to Excel ─────────────────────────────────────────────
+@app.get("/admin/export/members")
+def export_members(admin: dict = Depends(require_role("gym_admin"))):
     gym_id = admin["gym_id"]
     result = supabase.table("members").select("*").eq("gym_id", gym_id).execute()
-    return {"members": result.data}
+    members = result.data or []
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Members"
+
+    headers = ["Name", "Phone", "Email", "Login Code", "Status", "Expiry Date"]
+    ws.append(headers)
+
+    for m in members:
+        ws.append([
+            m.get("name", ""),
+            m.get("phone", ""),
+            m.get("email", ""),
+            m.get("login_code", ""),
+            m.get("status", ""),
+            m.get("expiry_date", ""),
+        ])
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=members_export.xlsx"},
+    )

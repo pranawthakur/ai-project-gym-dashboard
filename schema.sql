@@ -54,3 +54,20 @@ begin
         alter table members add constraint members_login_code_key unique (login_code);
     end if;
 end $$;
+
+-- members.expiry_date, needed by Membership Payment + dashboard "expiring soon"
+alter table members add column if not exists expiry_date date;
+
+-- New payments table for Membership Payment feature
+create table if not exists payments (
+    id uuid primary key default gen_random_uuid(),
+    gym_id uuid references gyms(id) on delete cascade,
+    member_id uuid references members(id) on delete cascade,
+    amount numeric not null,
+    plan text not null,
+    months int not null,
+    payment_method text not null,
+    transaction_id text,
+    created_at timestamptz not null default now()
+);
+
