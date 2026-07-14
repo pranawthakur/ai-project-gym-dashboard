@@ -74,3 +74,16 @@ create table if not exists payments (
     created_at timestamptz not null default now()
 );
 
+-- Payment type distinguishes the one-time admission fee from recurring
+-- monthly membership fees. Defaults to 'monthly' for any pre-existing rows.
+alter table payments add column if not exists payment_type text not null default 'monthly';
+alter table payments add column if not exists notes text;
+
+-- Membership plan + fee fields on members, needed for the payment panel
+-- and management table (admission fee tracking, monthly fee, last payment).
+alter table members add column if not exists membership_plan text;
+alter table members add column if not exists monthly_fee numeric;
+alter table members add column if not exists admission_fee_amount numeric;
+alter table members add column if not exists admission_fee_paid boolean not null default false;
+alter table members add column if not exists last_payment_date date;
+

@@ -16,6 +16,44 @@ from app.security import verify_password, hash_password
 from app.auth import create_token, require_role, get_current_admin
 from app.config import settings
 
+# Grace window (days) after expiry during which a membership is shown as
+# "Overdue" rather than "Expired" — gives the admin a short window to chase
+# payment before the member drops to fully expired.
+OVERDUE_GRACE_DAYS = 15
+
+
+def compute_member_status(member: dict, today) -> dict:
+    """
+    Derives the three status fields shown in the Member Management table
+    and the payment panel, always from live data (expiry_date, status,
+    admission_fee_paid) rather than a stored/stale flag.
+    """
+    expiry_raw = member.get("expiry_date")
+    expiry = datetime.fromisoformat(expiry_raw).date() if expiry_raw else None
+
+    admission_status = "Paid" if member.get("admission_fee_paid") else "Pending"
+
+    if member.get("status") == "suspended":
+        membership_status = "Suspended"
+    elif expiry and expiry < today:
+        membership_status = "Expired"
+    else:
+        membership_status = "Active"
+
+    if not expiry:
+        payment_status = "Pending"
+    elif expiry < today:
+        payment_status = "Overdue" if (today - expiry).days <= OVERDUE_GRACE_DAYS else "Expired"
+    else:
+        payment_status = "Paid"
+
+    return {
+        "admission_fee_status": admission_status,
+        "current_month_payment_status": payment_status,
+        "membership_status": membership_status,
+    }
+
+
 app = FastAPI(title="Gym Admin Dashboard (standalone)")
 
 # wide open for local testing — tighten before this touches the real frontend
@@ -138,45 +176,121 @@ def admin_signup(body: SignupRequest):
 
 
 # ── Dashboard ────────────────────────────────────────────────────────────
+# Response is grouped into the four sections the admin dashboard renders:
+# Membership Overview, Finance, AI Activity, Recent Activity. Each section
+# is independently defensive — if a column/table isn't there yet, that
+# section degrades to zeros instead of failing the whole endpoint.
 @app.get("/admin/dashboard")
 def dashboard(admin: dict = Depends(require_role("gym_admin"))):
     gym_id = admin["gym_id"]
-
-    try:
-        members = supabase.table("members").select("id", count="exact").eq("gym_id", gym_id).execute()
-        active_members = supabase.table("members").select("id", count="exact") \
-            .eq("gym_id", gym_id).eq("status", "active").execute()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"dashboard member counts failed: {e}")
-
     today = datetime.now(timezone.utc).date()
-    week_out = today + timedelta(days=7)
-    try:
-        expiring = supabase.table("members").select("id", count="exact") \
-            .eq("gym_id", gym_id).gte("expiry_date", today.isoformat()) \
-            .lte("expiry_date", week_out.isoformat()).execute()
-        expiring_count = expiring.count or 0
-    except Exception:
-        # expiry_date column may not exist yet if payments haven't been wired up
-        expiring_count = 0
+    month_start = today.replace(day=1)
 
+    # ── Membership Overview ──
+    try:
+        all_members = supabase.table("members").select("*").eq("gym_id", gym_id).execute()
+        member_rows = all_members.data or []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"dashboard member query failed: {e}")
+
+    total_members = len(member_rows)
+    active_members = 0
+    expired_members = 0
+    new_members = 0
+    pending_admission_fees = 0
+    pending_membership_payments = 0
+
+    for m in member_rows:
+        statuses = compute_member_status(m, today)
+        if statuses["membership_status"] == "Expired":
+            expired_members += 1
+        elif statuses["membership_status"] == "Active":
+            active_members += 1
+        if statuses["admission_fee_status"] == "Pending":
+            pending_admission_fees += 1
+        if statuses["current_month_payment_status"] in ("Pending", "Overdue"):
+            pending_membership_payments += 1
+        created_at = m.get("created_at")
+        if created_at:
+            try:
+                created_date = datetime.fromisoformat(created_at.replace("Z", "+00:00")).date()
+                if created_date >= month_start:
+                    new_members += 1
+            except Exception:
+                pass
+
+    # ── Finance ──
     try:
         todays_payments = supabase.table("payments").select("amount") \
             .eq("gym_id", gym_id).gte("created_at", today.isoformat()).execute()
         todays_revenue = sum(p["amount"] for p in todays_payments.data) if todays_payments.data else 0
     except Exception:
-        # payments table may not exist yet
         todays_revenue = 0
+
+    try:
+        month_payments = supabase.table("payments").select("amount") \
+            .eq("gym_id", gym_id).gte("created_at", month_start.isoformat()).execute()
+        monthly_revenue = sum(p["amount"] for p in month_payments.data) if month_payments.data else 0
+    except Exception:
+        monthly_revenue = 0
+
+    # ── AI Activity ──
+    # This standalone admin dashboard doesn't own the AI workflow (that
+    # lives in the separate member-facing app / ai-project-login repo), so
+    # there's nothing real to query yet. Zeros here are a placeholder, not
+    # a bug — wire this up once plan-generation/cache tables are shared.
+    ai_activity = {
+        "plans_generated": 0,
+        "ai_credits_used": 0,
+        "cache_hits": 0,
+        "cache_misses": 0,
+    }
+
+    # ── Recent Activity ──
+    try:
+        recent_members = sorted(member_rows, key=lambda m: m.get("created_at") or "", reverse=True)[:5]
+    except Exception:
+        recent_members = []
+    try:
+        recent_payments_res = supabase.table("payments").select("*") \
+            .eq("gym_id", gym_id).order("created_at", desc=True).limit(5).execute()
+        recent_payments = recent_payments_res.data or []
+    except Exception:
+        recent_payments = []
 
     return {
         "gym_id": gym_id,
-        "total_members": members.count or 0,
-        "active_members": active_members.count or 0,
-        "expiring_memberships": expiring_count,
-        "todays_revenue": todays_revenue,
-        # not tracked yet — need a login-log table to populate these for real
-        "todays_logins": 0,
-        "pending_renewals": 0,
+        "membership": {
+            "total_members": total_members,
+            "active_members": active_members,
+            "expired_members": expired_members,
+            "new_members": new_members,
+        },
+        "finance": {
+            "todays_revenue": todays_revenue,
+            "monthly_revenue": monthly_revenue,
+            "pending_membership_payments": pending_membership_payments,
+            "pending_admission_fees": pending_admission_fees,
+        },
+        "ai_activity": ai_activity,
+        "recent_activity": {
+            "recent_members": [
+                {"id": m.get("id"), "name": m.get("name"), "created_at": m.get("created_at")}
+                for m in recent_members
+            ],
+            "recent_payments": [
+                {
+                    "id": p.get("id"),
+                    "member_id": p.get("member_id"),
+                    "amount": p.get("amount"),
+                    "payment_type": p.get("payment_type"),
+                    "created_at": p.get("created_at"),
+                }
+                for p in recent_payments
+            ],
+            # not tracked yet — needs a login-log table
+            "recent_logins": [],
+        },
     }
 
 
@@ -252,7 +366,50 @@ def list_members(
             or s in (m.get("email") or "").lower()
         ]
 
+    today = datetime.now(timezone.utc).date()
+    for m in members:
+        m.update(compute_member_status(m, today))
+
     return {"members": members}
+
+
+# ── Member detail (payment panel) ───────────────────────────────────────
+@app.get("/admin/members/{member_id}")
+def get_member_detail(member_id: str, admin: dict = Depends(require_role("gym_admin"))):
+    gym_id = admin["gym_id"]
+    try:
+        result = supabase.table("members").select("*").eq("id", member_id).eq("gym_id", gym_id).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"member lookup failed: {e}")
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Member not found in your gym.")
+    member = result.data[0]
+
+    today = datetime.now(timezone.utc).date()
+    member.update(compute_member_status(member, today))
+
+    try:
+        history_res = supabase.table("payments").select("*") \
+            .eq("member_id", member_id).order("created_at", desc=True).execute()
+        history = history_res.data or []
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"payment history query failed: {e}")
+
+    outstanding_balance = 0
+    if member.get("admission_fee_amount") and not member.get("admission_fee_paid"):
+        outstanding_balance += member["admission_fee_amount"]
+    if member.get("current_month_payment_status") in ("Pending", "Overdue") and member.get("monthly_fee"):
+        outstanding_balance += member["monthly_fee"]
+
+    last_payment_date = history[0]["created_at"] if history else member.get("last_payment_date")
+
+    return {
+        "member": member,
+        "payment_history": history,
+        "outstanding_balance": outstanding_balance,
+        "last_payment_date": last_payment_date,
+        "next_due_date": member.get("expiry_date"),
+    }
 
 
 # ── Edit member ──────────────────────────────────────────────────────────
@@ -260,6 +417,9 @@ class EditMemberRequest(BaseModel):
     name: str | None = None
     phone: str | None = None
     email: str | None = None
+    membership_plan: str | None = None
+    monthly_fee: float | None = None
+    admission_fee_amount: float | None = None
 
 
 @app.patch("/admin/members/{member_id}")
@@ -395,6 +555,197 @@ def mark_paid(member_id: str, body: MarkPaidRequest, admin: dict = Depends(requi
     # TODO: generate invoice PDF (ReportLab/WeasyPrint) and send via WhatsApp
     # once those providers are wired up — flagged in flowchart, not built yet.
     return {"payment": payment.data[0], "new_expiry_date": expiry_date}
+
+
+# ── Mark Admission Fee Paid ──────────────────────────────────────────────
+class AdmissionFeePaidRequest(BaseModel):
+    amount: float
+    payment_method: str
+    transaction_id: str | None = None
+    notes: str | None = None
+
+
+@app.post("/admin/members/{member_id}/admission-fee/pay")
+def pay_admission_fee(member_id: str, body: AdmissionFeePaidRequest, admin: dict = Depends(require_role("gym_admin"))):
+    gym_id = admin["gym_id"]
+    try:
+        member = supabase.table("members").select("id").eq("id", member_id).eq("gym_id", gym_id).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"member lookup failed: {e}")
+    if not member.data:
+        raise HTTPException(status_code=404, detail="Member not found in your gym.")
+
+    try:
+        payment = supabase.table("payments").insert({
+            "gym_id": gym_id,
+            "member_id": member_id,
+            "amount": body.amount,
+            "plan": "Admission Fee",
+            "months": 0,
+            "payment_method": body.payment_method,
+            "transaction_id": body.transaction_id,
+            "payment_type": "admission",
+            "notes": body.notes,
+        }).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"admission fee payment insert failed: {e}")
+
+    try:
+        updated = supabase.table("members").update({
+            "admission_fee_paid": True,
+            "admission_fee_amount": body.amount,
+        }).eq("id", member_id).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"member admission_fee_paid update failed: {e}")
+
+    return {"payment": payment.data[0], "member": updated.data[0]}
+
+
+# ── Mark Monthly Payment Paid ────────────────────────────────────────────
+class MonthlyPaymentRequest(BaseModel):
+    amount: float
+    months: int = 1
+    plan: str | None = None
+    payment_method: str
+    transaction_id: str | None = None
+    notes: str | None = None
+
+
+@app.post("/admin/members/{member_id}/monthly-payment/pay")
+def pay_monthly_membership(member_id: str, body: MonthlyPaymentRequest, admin: dict = Depends(require_role("gym_admin"))):
+    gym_id = admin["gym_id"]
+    try:
+        result = supabase.table("members").select("*").eq("id", member_id).eq("gym_id", gym_id).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"member lookup failed: {e}")
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Member not found in your gym.")
+    member = result.data[0]
+
+    today = datetime.now(timezone.utc).date()
+    current_expiry = datetime.fromisoformat(member["expiry_date"]).date() if member.get("expiry_date") else None
+    # Renewing extends from the later of today or the current expiry, so
+    # paying early doesn't lose the remaining paid-for days.
+    base_date = current_expiry if current_expiry and current_expiry > today else today
+    new_expiry = (base_date + timedelta(days=30 * body.months)).isoformat()
+
+    try:
+        payment = supabase.table("payments").insert({
+            "gym_id": gym_id,
+            "member_id": member_id,
+            "amount": body.amount,
+            "plan": body.plan or member.get("membership_plan") or "Membership",
+            "months": body.months,
+            "payment_method": body.payment_method,
+            "transaction_id": body.transaction_id,
+            "payment_type": "monthly",
+            "notes": body.notes,
+        }).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"monthly payment insert failed: {e}")
+
+    update_fields = {"expiry_date": new_expiry, "last_payment_date": today.isoformat()}
+    if body.plan:
+        update_fields["membership_plan"] = body.plan
+    if body.months:
+        update_fields["monthly_fee"] = body.amount / body.months
+
+    try:
+        updated = supabase.table("members").update(update_fields).eq("id", member_id).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"member expiry update failed: {e}")
+
+    return {"payment": payment.data[0], "member": updated.data[0], "new_expiry_date": new_expiry}
+
+
+# ── Extend Membership (no new payment — admin override / goodwill extension) ──
+class ExtendMembershipRequest(BaseModel):
+    months: int = 1
+    notes: str | None = None
+
+
+@app.post("/admin/members/{member_id}/extend")
+def extend_membership(member_id: str, body: ExtendMembershipRequest, admin: dict = Depends(require_role("gym_admin"))):
+    gym_id = admin["gym_id"]
+    try:
+        result = supabase.table("members").select("*").eq("id", member_id).eq("gym_id", gym_id).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"member lookup failed: {e}")
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Member not found in your gym.")
+    member = result.data[0]
+
+    today = datetime.now(timezone.utc).date()
+    current_expiry = datetime.fromisoformat(member["expiry_date"]).date() if member.get("expiry_date") else today
+    base_date = current_expiry if current_expiry > today else today
+    new_expiry = (base_date + timedelta(days=30 * body.months)).isoformat()
+
+    try:
+        updated = supabase.table("members").update({"expiry_date": new_expiry}).eq("id", member_id).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"membership extend failed: {e}")
+
+    return {"member": updated.data[0], "new_expiry_date": new_expiry}
+
+
+# ── Generate Invoice ─────────────────────────────────────────────────────
+# No PDF library is wired into this project yet, so this returns a clean,
+# printable HTML invoice (the browser's own "Print to PDF" covers the PDF
+# need without adding a new dependency). Defaults to the most recent
+# payment; pass ?payment_id= to invoice a specific one.
+@app.get("/admin/members/{member_id}/invoice", response_class=HTMLResponse)
+def generate_invoice(member_id: str, payment_id: str | None = None, admin: dict = Depends(require_role("gym_admin"))):
+    gym_id = admin["gym_id"]
+    try:
+        member_res = supabase.table("members").select("*").eq("id", member_id).eq("gym_id", gym_id).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"member lookup failed: {e}")
+    if not member_res.data:
+        raise HTTPException(status_code=404, detail="Member not found in your gym.")
+    member = member_res.data[0]
+
+    try:
+        query = supabase.table("payments").select("*").eq("member_id", member_id)
+        if payment_id:
+            query = query.eq("id", payment_id)
+        else:
+            query = query.order("created_at", desc=True).limit(1)
+        payment_res = query.execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"payment lookup failed: {e}")
+    if not payment_res.data:
+        raise HTTPException(status_code=404, detail="No payment found to invoice.")
+    payment = payment_res.data[0]
+
+    html = f"""
+    <!DOCTYPE html>
+    <html><head><meta charset="UTF-8"><title>Invoice</title>
+    <style>
+      body {{ font-family: Arial, sans-serif; color: #111; max-width: 640px; margin: 40px auto; }}
+      h1 {{ font-size: 20px; margin-bottom: 4px; }}
+      table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+      td, th {{ padding: 8px; border-bottom: 1px solid #ddd; text-align: left; font-size: 14px; }}
+      .total {{ font-weight: bold; font-size: 16px; }}
+    </style></head>
+    <body>
+      <h1>Payment Invoice</h1>
+      <div>Member: {member.get('name', '')}</div>
+      <div>Phone: {member.get('phone', '')}</div>
+      <div>Membership Plan: {member.get('membership_plan') or '-'}</div>
+      <table>
+        <tr><th>Date</th><th>Type</th><th>Method</th><th>Transaction ID</th><th>Amount</th></tr>
+        <tr>
+          <td>{payment.get('created_at', '')[:10]}</td>
+          <td>{'Admission' if payment.get('payment_type') == 'admission' else 'Monthly'}</td>
+          <td>{payment.get('payment_method', '')}</td>
+          <td>{payment.get('transaction_id') or '-'}</td>
+          <td>{payment.get('amount', 0)}</td>
+        </tr>
+      </table>
+      <p class="total">Total Paid: {payment.get('amount', 0)}</p>
+    </body></html>
+    """
+    return HTMLResponse(content=html)
 
 
 # ── Export members to Excel ─────────────────────────────────────────────

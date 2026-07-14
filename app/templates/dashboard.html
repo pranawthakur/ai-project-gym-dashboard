@@ -28,9 +28,11 @@ body { margin:0; font-family:'Inter',system-ui,-apple-system,"Segoe UI",Roboto,s
 
 .topnav { display:flex; align-items:center; justify-content:space-between; padding:16px 24px; border-bottom:1px solid var(--border); }
 .topnav .logo { display:flex; align-items:center; gap:10px; font-weight:800; font-size:17px; }
-.logo-icon { width:34px; height:34px; border-radius:10px; background:var(--grad-primary); display:flex; align-items:center; justify-content:center; font-size:16px; }
-.hamburger { background:none; border:1px solid var(--border); color:var(--fg); width:36px; height:36px; border-radius:10px; cursor:pointer; font-size:16px; margin-right:8px; }
+.logo-icon { width:34px; height:34px; border-radius:10px; background:var(--grad-primary); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:800; color:#fff; }
+.hamburger { background:none; border:1px solid var(--border); color:var(--fg); width:36px; height:36px; border-radius:10px; cursor:pointer; margin-right:8px; display:flex; align-items:center; justify-content:center; }
 .hamburger:hover { border-color:rgba(139,92,246,.4); }
+.hamburger .bars { width:16px; height:11px; display:flex; flex-direction:column; justify-content:space-between; }
+.hamburger .bars span { display:block; height:2px; background:var(--fg); border-radius:1px; }
 .logout-btn { background:none; border:1px solid var(--border); color:var(--muted); padding:8px 16px; border-radius:10px; cursor:pointer; font-size:13px; font-weight:600; }
 .logout-btn:hover { color:var(--fg); border-color:rgba(139,92,246,.4); }
 
@@ -46,19 +48,23 @@ body { margin:0; font-family:'Inter',system-ui,-apple-system,"Segoe UI",Roboto,s
 .nav-item.active { background:rgba(139,92,246,.16); color:#c4b5fd; }
 
 .main { flex:1; min-width:0; }
-.wrap { max-width:1100px; margin:0 auto; padding:28px 20px 60px; }
+.wrap { max-width:1180px; margin:0 auto; padding:28px 20px 60px; }
 h1 { font-family:'Baloo 2',cursive; font-size:1.8rem; font-weight:800; margin:0 0 20px; background:var(--grad-heading); -webkit-background-clip:text; background-clip:text; color:transparent; }
 
 .view { display:none; }
 .view.active { display:block; }
 
-.stats-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:32px; }
-@media (max-width:700px) { .stats-grid { grid-template-columns:repeat(2,1fr); } }
-.stat-card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:18px; animation:fadeUp .5s cubic-bezier(.16,1,.3,1) both; transition:border-color .3s ease, box-shadow .3s ease; }
-.stat-card .num { font-size:1.6rem; font-weight:800; color:#c4b5fd; display:inline-block; transition:transform .25s ease; }
-.stat-card .label { font-size:12px; color:var(--muted); font-weight:600; margin-top:4px; }
-.stat-card.pulse { border-color:rgba(168,85,247,.6); box-shadow:0 0 0 3px rgba(168,85,247,.12); }
-.stat-card.pulse .num { transform:scale(1.12); }
+/* ── Merged dashboard sections ───────────────────────────────────── */
+.section-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px; }
+@media (max-width:900px) { .section-grid { grid-template-columns:1fr; } }
+
+.metric-row { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+@media (max-width:520px) { .metric-row { grid-template-columns:repeat(2,1fr); } }
+.metric { padding:10px 4px; border-radius:12px; transition:background .3s ease; }
+.metric.pulse { background:rgba(168,85,247,.12); }
+.metric .num { font-size:1.35rem; font-weight:800; color:#c4b5fd; display:block; }
+.metric .label { font-size:11.5px; color:var(--muted); font-weight:600; margin-top:2px; }
+
 .live-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--success); margin-left:6px; box-shadow:0 0 0 0 rgba(74,222,128,.6); animation:livePulse 2s infinite; vertical-align:middle; }
 @keyframes livePulse { 0%{box-shadow:0 0 0 0 rgba(74,222,128,.55);} 70%{box-shadow:0 0 0 6px rgba(74,222,128,0);} 100%{box-shadow:0 0 0 0 rgba(74,222,128,0);} }
 tr.row-new { animation:rowIn .5s ease both; }
@@ -68,6 +74,15 @@ tr.row-updating { opacity:.5; pointer-events:none; transition:opacity .2s ease; 
 .card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:22px; margin-bottom:24px; box-shadow:var(--shadow-card); animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both; }
 .card-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; gap:12px; flex-wrap:wrap; }
 .card-head h3 { margin:0; font-size:1rem; }
+.card-head .sub { color:var(--muted); font-size:11.5px; margin-top:2px; }
+
+.recent-list { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px; }
+.recent-list li { display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
+.recent-list li:last-child { border-bottom:none; }
+.recent-list .meta { color:var(--muted); font-size:11.5px; }
+.recent-tabs { display:flex; gap:6px; margin-bottom:12px; }
+.recent-tab { padding:6px 12px; border-radius:8px; border:1px solid var(--border); background:none; color:var(--muted); font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; }
+.recent-tab.active { background:rgba(139,92,246,.16); color:#c4b5fd; border-color:transparent; }
 
 .grid.c3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
 .grid.c2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
@@ -77,7 +92,7 @@ input, select { width:100%; padding:9px 12px; font-size:14px; color:var(--fg); b
 input:focus, select:focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(168,85,247,.2); }
 button.primary { padding:9px 18px; border:none; border-radius:10px; background:var(--grad-primary); color:#fff; font-weight:700; font-size:13px; cursor:pointer; box-shadow:var(--shadow-glow); }
 button.primary:disabled { opacity:.6; cursor:not-allowed; }
-button.ghost { padding:8px 14px; border:1px solid var(--border); border-radius:9px; background:none; color:var(--fg); font-weight:600; font-size:12.5px; cursor:pointer; }
+button.ghost { padding:8px 14px; border:1px solid var(--border); border-radius:9px; background:none; color:var(--fg); font-weight:600; font-size:12.5px; cursor:pointer; font-family:inherit; }
 button.ghost:hover { border-color:rgba(139,92,246,.4); }
 button.ghost.danger { color:var(--danger); border-color:rgba(248,113,113,.3); }
 button.ghost.danger:hover { border-color:var(--danger); }
@@ -94,25 +109,42 @@ button.ghost.small { padding:5px 10px; font-size:11.5px; }
 .filters input { max-width:280px; }
 .filters select { max-width:160px; }
 
-table { width:100%; border-collapse:collapse; font-size:13px; }
-th { text-align:left; color:var(--muted); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
+.table-scroll { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; font-size:13px; min-width:920px; }
+th { text-align:left; color:var(--muted); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--border); font-size:11px; text-transform:uppercase; letter-spacing:.5px; white-space:nowrap; }
 td { padding:10px; border-bottom:1px solid var(--border); vertical-align:middle; }
-tr:hover td { background:rgba(139,92,246,.05); }
+tr.clickable-row { cursor:pointer; }
+tr.clickable-row:hover td { background:rgba(139,92,246,.05); }
 .code-pill { font-family:monospace; background:#0f0a1c; padding:3px 8px; border-radius:6px; letter-spacing:1px; }
-.status-pill { font-size:11px; font-weight:700; padding:3px 9px; border-radius:999px; }
-.status-pill.active { background:rgba(74,222,128,.15); color:var(--success); }
-.status-pill.suspended { background:rgba(248,113,113,.15); color:var(--danger); }
+.status-text { font-size:12px; font-weight:700; }
+.status-text.ok { color:var(--success); }
+.status-text.bad { color:var(--danger); }
+.status-text.warn { color:var(--warn); }
+.status-text.muted { color:var(--muted); }
 .empty { color:var(--muted); font-size:13px; text-align:center; padding:20px; }
 .row-actions { display:flex; gap:6px; flex-wrap:wrap; }
 
 /* ── Modal ──────────────────────────────────────────────────────── */
-.modal-backdrop { display:none; position:fixed; inset:0; background:rgba(5,3,10,.7); z-index:50; align-items:center; justify-content:center; padding:20px; }
+.modal-backdrop { display:none; position:fixed; inset:0; background:rgba(5,3,10,.7); z-index:50; align-items:flex-start; justify-content:center; padding:32px 20px; overflow-y:auto; }
 .modal-backdrop.open { display:flex; }
-.modal { width:100%; max-width:440px; background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:24px; box-shadow:var(--shadow-glow); }
+.modal { width:100%; max-width:460px; background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:24px; box-shadow:var(--shadow-glow); }
+.modal.wide { max-width:640px; }
 .modal h3 { margin:0 0 4px; font-size:1.05rem; }
 .modal .sub { color:var(--muted); font-size:12.5px; margin-bottom:18px; }
-.modal-close { float:right; background:none; border:none; color:var(--muted); font-size:18px; cursor:pointer; }
-.modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:18px; }
+.modal-close { float:right; background:none; border:1px solid var(--border); color:var(--muted); font-size:14px; cursor:pointer; width:26px; height:26px; border-radius:8px; line-height:1; }
+.modal-close:hover { color:var(--fg); border-color:rgba(139,92,246,.4); }
+.modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:18px; flex-wrap:wrap; }
+
+/* ── Payment panel ──────────────────────────────────────────────── */
+.panel-section { margin-bottom:18px; }
+.panel-section h4 { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin:0 0 8px; }
+.panel-fields { display:grid; grid-template-columns:1fr 1fr; gap:10px 16px; }
+.panel-field .k { font-size:11.5px; color:var(--muted); }
+.panel-field .v { font-size:13.5px; font-weight:600; margin-top:2px; }
+.panel-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+.history-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+.history-table th { text-align:left; color:var(--muted); font-weight:600; padding:6px 8px; border-bottom:1px solid var(--border); font-size:10.5px; text-transform:uppercase; }
+.history-table td { padding:6px 8px; border-bottom:1px solid var(--border); }
 </style>
 </head>
 <body>
@@ -120,8 +152,8 @@ tr:hover td { background:rgba(139,92,246,.05); }
 
 <div class="topnav">
   <div style="display:flex; align-items:center;">
-    <button class="hamburger" id="sidebarToggle" title="Toggle navigation">☰</button>
-    <div class="logo"><div class="logo-icon">🏋</div>GymCoach Studio — Admin</div>
+    <button class="hamburger" id="sidebarToggle" title="Toggle navigation"><span class="bars"><span></span><span></span><span></span></span></button>
+    <div class="logo"><div class="logo-icon">GC</div>GymCoach Studio — Admin</div>
   </div>
   <button class="logout-btn" onclick="logout()">Log Out</button>
 </div>
@@ -129,23 +161,15 @@ tr:hover td { background:rgba(139,92,246,.05); }
 <div class="layout">
   <nav class="sidebar" id="sidebar">
     <div class="sidebar-section">
-      <button class="nav-item active" data-view="viewDashboard">📊 Dashboard</button>
+      <button class="nav-item active" data-view="viewDashboard">Dashboard</button>
     </div>
     <div class="sidebar-section">
       <div class="sec-label">Member Management</div>
-      <button class="nav-item" data-view="viewMembers">👥 Search &amp; Filter</button>
-      <button class="nav-item" data-view="viewMembers">✏️ Edit / Suspend / Delete</button>
-      <button class="nav-item" data-view="viewMembers">🔑 Regenerate Login Code</button>
-      <button class="nav-item" data-view="viewMembers">🤖 Reset AI Credits</button>
-      <button class="nav-item" data-view="viewMembers">📜 View AI History</button>
-    </div>
-    <div class="sidebar-section">
-      <div class="sec-label">Membership Payment</div>
-      <button class="nav-item" data-view="viewMembers">💳 Mark As Paid</button>
+      <button class="nav-item" data-view="viewMembers">Members</button>
     </div>
     <div class="sidebar-section">
       <div class="sec-label">Export</div>
-      <button class="nav-item" id="navExport">⬇️ Download Excel</button>
+      <button class="nav-item" id="navExport">Download Excel</button>
     </div>
   </nav>
 
@@ -156,13 +180,48 @@ tr:hover td { background:rgba(139,92,246,.05); }
       <div class="view active" id="viewDashboard">
         <h1>Dashboard <span class="live-dot" title="Live"></span></h1>
 
-        <div class="stats-grid" id="statsGrid">
-          <div class="stat-card"><div class="num" id="statTotalMembers">—</div><div class="label">Total Members</div></div>
-          <div class="stat-card"><div class="num" id="statTodayLogins">—</div><div class="label">Today's Logins</div></div>
-          <div class="stat-card"><div class="num" id="statActive">—</div><div class="label">Active Members</div></div>
-          <div class="stat-card"><div class="num" id="statExpiring">—</div><div class="label">Expiring Memberships</div></div>
-          <div class="stat-card"><div class="num" id="statPending">—</div><div class="label">Pending Renewals</div></div>
-          <div class="stat-card"><div class="num" id="statRevenue">—</div><div class="label">Today's Revenue</div></div>
+        <div class="section-grid">
+          <div class="card">
+            <div class="card-head"><h3>Membership Overview</h3></div>
+            <div class="metric-row">
+              <div class="metric"><span class="num" id="statTotalMembers">—</span><span class="label">Total Members</span></div>
+              <div class="metric"><span class="num" id="statActive">—</span><span class="label">Active Members</span></div>
+              <div class="metric"><span class="num" id="statExpired">—</span><span class="label">Expired Members</span></div>
+              <div class="metric"><span class="num" id="statNew">—</span><span class="label">New This Month</span></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h3>Finance</h3></div>
+            <div class="metric-row">
+              <div class="metric"><span class="num" id="statTodayRevenue">—</span><span class="label">Today's Revenue</span></div>
+              <div class="metric"><span class="num" id="statMonthRevenue">—</span><span class="label">Monthly Revenue</span></div>
+              <div class="metric"><span class="num" id="statPendingMembership">—</span><span class="label">Pending Membership Payments</span></div>
+              <div class="metric"><span class="num" id="statPendingAdmission">—</span><span class="label">Pending Admission Fees</span></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h3>AI Activity</h3><span class="sub" style="width:100%">Not yet wired to the AI engine (lives in the member-facing app)</span></div>
+            <div class="metric-row">
+              <div class="metric"><span class="num" id="statPlansGenerated">—</span><span class="label">Plans Generated</span></div>
+              <div class="metric"><span class="num" id="statAiCredits">—</span><span class="label">AI Credits Used</span></div>
+              <div class="metric"><span class="num" id="statCacheHits">—</span><span class="label">Cache Hits</span></div>
+              <div class="metric"><span class="num" id="statCacheMisses">—</span><span class="label">Cache Misses</span></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <h3>Recent Activity</h3>
+            </div>
+            <div class="recent-tabs">
+              <button class="recent-tab active" data-recent="members">Members</button>
+              <button class="recent-tab" data-recent="payments">Payments</button>
+              <button class="recent-tab" data-recent="logins">Logins</button>
+            </div>
+            <ul class="recent-list" id="recentList"><li class="meta">Loading…</li></ul>
+          </div>
         </div>
 
         <div class="card">
@@ -199,7 +258,7 @@ tr:hover td { background:rgba(139,92,246,.05); }
         <div class="card">
           <div class="card-head">
             <h3>Members</h3>
-            <button class="ghost" onclick="downloadExport()">⬇️ Export Excel</button>
+            <button class="ghost" onclick="downloadExport()">Export Excel</button>
           </div>
 
           <div class="filters">
@@ -211,14 +270,19 @@ tr:hover td { background:rgba(139,92,246,.05); }
             </select>
           </div>
 
+          <div class="table-scroll">
           <table>
             <thead>
-              <tr><th>Name</th><th>Phone</th><th>Login Code</th><th>Status</th><th>Expiry</th><th>Actions</th></tr>
+              <tr>
+                <th>Name</th><th>Phone</th><th>Plan</th><th>Admission Fee</th>
+                <th>Payment Status</th><th>Expiry Date</th><th>Membership Status</th><th>Actions</th>
+              </tr>
             </thead>
             <tbody id="membersTableBody">
-              <tr><td colspan="6" class="empty">Loading…</td></tr>
+              <tr><td colspan="8" class="empty">Loading…</td></tr>
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 
@@ -229,13 +293,16 @@ tr:hover td { background:rgba(139,92,246,.05); }
 <!-- ── Edit Member Modal ─────────────────────────────────────────── -->
 <div class="modal-backdrop" id="editModal">
   <div class="modal">
-    <button class="modal-close" onclick="closeModal('editModal')">✕</button>
+    <button class="modal-close" onclick="closeModal('editModal')">&times;</button>
     <h3>Edit Member</h3>
     <div class="sub">Leave a field blank to keep it unchanged.</div>
     <div class="grid c2" style="grid-template-columns:1fr;">
       <div><label class="lbl">Name</label><input type="text" id="editName" /></div>
       <div><label class="lbl">Phone</label><input type="tel" id="editPhone" /></div>
       <div><label class="lbl">Email</label><input type="email" id="editEmail" /></div>
+      <div><label class="lbl">Membership Plan</label><input type="text" id="editPlan" /></div>
+      <div><label class="lbl">Monthly Fee (Rs.)</label><input type="number" id="editMonthlyFee" /></div>
+      <div><label class="lbl">Admission Fee Amount (Rs.)</label><input type="number" id="editAdmissionFee" /></div>
     </div>
     <div class="modal-actions">
       <button class="ghost" onclick="closeModal('editModal')">Cancel</button>
@@ -244,28 +311,107 @@ tr:hover td { background:rgba(139,92,246,.05); }
   </div>
 </div>
 
-<!-- ── Mark As Paid Modal ────────────────────────────────────────── -->
-<div class="modal-backdrop" id="payModal">
+<!-- ── Member Payment Panel (view / edit / pay / history) ──────────── -->
+<div class="modal-backdrop" id="panelModal">
+  <div class="modal wide">
+    <button class="modal-close" onclick="closeModal('panelModal')">&times;</button>
+    <h3 id="panelName">Member</h3>
+    <div class="sub" id="panelPhone"></div>
+
+    <div class="panel-section">
+      <h4>Membership</h4>
+      <div class="panel-fields">
+        <div class="panel-field"><div class="k">Membership Plan</div><div class="v" id="panelPlan">—</div></div>
+        <div class="k">Monthly Fee</div><div class="v" id="panelMonthlyFee">—</div>
+        <div class="panel-field"><div class="k">Admission Fee Amount</div><div class="v" id="panelAdmissionAmount">—</div></div>
+        <div class="panel-field"><div class="k">Admission Fee Status</div><div class="v" id="panelAdmissionStatus">—</div></div>
+        <div class="panel-field"><div class="k">Current Billing Status</div><div class="v" id="panelBillingStatus">—</div></div>
+        <div class="panel-field"><div class="k">Membership Status</div><div class="v" id="panelMembershipStatus">—</div></div>
+        <div class="panel-field"><div class="k">Last Payment Date</div><div class="v" id="panelLastPayment">—</div></div>
+        <div class="panel-field"><div class="k">Next Due Date</div><div class="v" id="panelNextDue">—</div></div>
+        <div class="panel-field"><div class="k">Membership Expiry</div><div class="v" id="panelExpiry">—</div></div>
+        <div class="panel-field"><div class="k">Outstanding Balance</div><div class="v" id="panelOutstanding">—</div></div>
+      </div>
+      <div class="panel-actions">
+        <button class="ghost" onclick="openAdmissionPay()">Mark Admission Fee Paid</button>
+        <button class="ghost" onclick="openMonthlyPay()">Mark Monthly Payment Paid</button>
+        <button class="ghost" onclick="openExtend()">Extend Membership</button>
+        <button class="ghost" onclick="downloadInvoice()">Generate Invoice</button>
+        <button class="ghost" onclick="openEditFromPanel()">Edit Details</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h4>Payment History</h4>
+      <div class="table-scroll">
+      <table class="history-table">
+        <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Method</th><th>Transaction ID</th><th>Notes</th></tr></thead>
+        <tbody id="panelHistoryBody"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+      </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Mark Admission Fee Paid Modal ─────────────────────────────── -->
+<div class="modal-backdrop" id="admissionPayModal">
   <div class="modal">
-    <button class="modal-close" onclick="closeModal('payModal')">✕</button>
-    <h3>Mark As Paid</h3>
-    <div class="sub" id="paySub">Record a membership payment.</div>
+    <button class="modal-close" onclick="closeModal('admissionPayModal')">&times;</button>
+    <h3>Mark Admission Fee Paid</h3>
+    <div class="sub" id="admissionPaySub">Record the one-time admission fee.</div>
     <div class="grid c2">
-      <div><label class="lbl">Amount (₹)</label><input type="number" id="payAmount" min="0" step="1" /></div>
-      <div><label class="lbl">Months</label><input type="number" id="payMonths" min="1" step="1" value="1" /></div>
-      <div><label class="lbl">Plan</label><input type="text" id="payPlan" placeholder="e.g. Standard" /></div>
+      <div><label class="lbl">Amount (Rs.)</label><input type="number" id="admissionAmount" min="0" step="1" /></div>
       <div>
         <label class="lbl">Payment Method</label>
-        <select id="payMethod">
-          <option>Cash</option><option>UPI</option><option>Card</option><option>Bank Transfer</option>
-        </select>
+        <select id="admissionMethod"><option>Cash</option><option>UPI</option><option>Card</option><option>Bank Transfer</option></select>
       </div>
-      <div style="grid-column:1/-1;"><label class="lbl">Transaction ID (optional)</label><input type="text" id="payTxnId" /></div>
+      <div><label class="lbl">Transaction ID (optional)</label><input type="text" id="admissionTxnId" /></div>
+      <div><label class="lbl">Notes (optional)</label><input type="text" id="admissionNotes" /></div>
     </div>
-    <div class="sub" style="margin-top:10px;">Invoice PDF + WhatsApp send aren't wired up yet — payment will still save and update the expiry date.</div>
     <div class="modal-actions">
-      <button class="ghost" onclick="closeModal('payModal')">Cancel</button>
-      <button class="primary" id="paySaveBtn" onclick="submitPayment()">Save Payment</button>
+      <button class="ghost" onclick="closeModal('admissionPayModal')">Cancel</button>
+      <button class="primary" id="admissionPaySaveBtn" onclick="submitAdmissionPay()">Save Payment</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Mark Monthly Payment Paid Modal ───────────────────────────── -->
+<div class="modal-backdrop" id="monthlyPayModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('monthlyPayModal')">&times;</button>
+    <h3>Mark Monthly Payment Paid</h3>
+    <div class="sub" id="monthlyPaySub">Record a membership payment and extend expiry.</div>
+    <div class="grid c2">
+      <div><label class="lbl">Amount (Rs.)</label><input type="number" id="monthlyAmount" min="0" step="1" /></div>
+      <div><label class="lbl">Months</label><input type="number" id="monthlyMonths" min="1" step="1" value="1" /></div>
+      <div><label class="lbl">Plan (optional)</label><input type="text" id="monthlyPlan" placeholder="e.g. Standard" /></div>
+      <div>
+        <label class="lbl">Payment Method</label>
+        <select id="monthlyMethod"><option>Cash</option><option>UPI</option><option>Card</option><option>Bank Transfer</option></select>
+      </div>
+      <div style="grid-column:1/-1;"><label class="lbl">Transaction ID (optional)</label><input type="text" id="monthlyTxnId" /></div>
+      <div style="grid-column:1/-1;"><label class="lbl">Notes (optional)</label><input type="text" id="monthlyNotes" /></div>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost" onclick="closeModal('monthlyPayModal')">Cancel</button>
+      <button class="primary" id="monthlyPaySaveBtn" onclick="submitMonthlyPay()">Save Payment</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Extend Membership Modal ────────────────────────────────────── -->
+<div class="modal-backdrop" id="extendModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('extendModal')">&times;</button>
+    <h3>Extend Membership</h3>
+    <div class="sub">Extends expiry without recording a new payment.</div>
+    <div class="grid c2">
+      <div><label class="lbl">Months</label><input type="number" id="extendMonths" min="1" step="1" value="1" /></div>
+      <div><label class="lbl">Notes (optional)</label><input type="text" id="extendNotes" /></div>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost" onclick="closeModal('extendModal')">Cancel</button>
+      <button class="primary" id="extendSaveBtn" onclick="submitExtend()">Extend</button>
     </div>
   </div>
 </div>
@@ -305,20 +451,22 @@ document.querySelectorAll(".nav-item[data-view]").forEach(btn => {
 document.getElementById("navExport").addEventListener("click", downloadExport);
 
 // ── Dashboard stats ─────────────────────────────────────────────
-// Tracks last-seen values so we only pulse the cards that actually changed,
-// instead of flashing the whole grid on every poll.
+// Tracks last-seen values so we only pulse the metrics that actually
+// changed, instead of flashing the whole grid on every poll.
 let lastStats = {};
+let lastDashboardData = null;
 
 function setStat(id, value) {
   const el = document.getElementById(id);
-  const display = typeof value === "number" ? value : value;
-  if (lastStats[id] !== undefined && lastStats[id] !== display) {
-    const card = el.closest(".stat-card");
-    card.classList.add("pulse");
-    setTimeout(() => card.classList.remove("pulse"), 500);
+  if (lastStats[id] !== undefined && lastStats[id] !== value) {
+    const metric = el.closest(".metric");
+    if (metric) {
+      metric.classList.add("pulse");
+      setTimeout(() => metric.classList.remove("pulse"), 500);
+    }
   }
-  lastStats[id] = display;
-  el.textContent = display;
+  lastStats[id] = value;
+  el.textContent = value;
 }
 
 async function loadDashboard(silent) {
@@ -327,17 +475,68 @@ async function loadDashboard(silent) {
     if (res.status === 401 || res.status === 403) return logout();
     if (!res.ok) throw new Error("dashboard fetch failed");
     const data = await res.json();
-    setStat("statTotalMembers", data.total_members);
-    setStat("statTodayLogins", data.todays_logins);
-    setStat("statActive", data.active_members);
-    setStat("statExpiring", data.expiring_memberships);
-    setStat("statPending", data.pending_renewals);
-    setStat("statRevenue", "₹" + data.todays_revenue);
+    lastDashboardData = data;
+
+    setStat("statTotalMembers", data.membership.total_members);
+    setStat("statActive", data.membership.active_members);
+    setStat("statExpired", data.membership.expired_members);
+    setStat("statNew", data.membership.new_members);
+
+    setStat("statTodayRevenue", "Rs. " + data.finance.todays_revenue);
+    setStat("statMonthRevenue", "Rs. " + data.finance.monthly_revenue);
+    setStat("statPendingMembership", data.finance.pending_membership_payments);
+    setStat("statPendingAdmission", data.finance.pending_admission_fees);
+
+    setStat("statPlansGenerated", data.ai_activity.plans_generated);
+    setStat("statAiCredits", data.ai_activity.ai_credits_used);
+    setStat("statCacheHits", data.ai_activity.cache_hits);
+    setStat("statCacheMisses", data.ai_activity.cache_misses);
+
+    renderRecentActivity();
   } catch (err) {
     // silent polling failures shouldn't interrupt the admin — only surface
     // an error on the very first load
     if (!silent) showBanner("err", "Could not load dashboard stats.");
   }
+}
+
+// ── Recent Activity tabs ────────────────────────────────────────
+let recentTab = "members";
+document.querySelectorAll(".recent-tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".recent-tab").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    recentTab = btn.dataset.recent;
+    renderRecentActivity();
+  });
+});
+
+function renderRecentActivity() {
+  const list = document.getElementById("recentList");
+  if (!lastDashboardData) { list.innerHTML = `<li class="meta">Loading…</li>`; return; }
+  const activity = lastDashboardData.recent_activity;
+
+  if (recentTab === "members") {
+    const items = activity.recent_members || [];
+    list.innerHTML = items.length
+      ? items.map(m => `<li><span>${escapeHtml(m.name || "")}</span><span class="meta">${formatDate(m.created_at)}</span></li>`).join("")
+      : `<li class="meta">No recent members.</li>`;
+  } else if (recentTab === "payments") {
+    const items = activity.recent_payments || [];
+    list.innerHTML = items.length
+      ? items.map(p => `<li><span>Rs. ${p.amount} (${p.payment_type === "admission" ? "Admission" : "Monthly"})</span><span class="meta">${formatDate(p.created_at)}</span></li>`).join("")
+      : `<li class="meta">No recent payments.</li>`;
+  } else {
+    const items = activity.recent_logins || [];
+    list.innerHTML = items.length
+      ? items.map(l => `<li><span>${escapeHtml(l.name || "")}</span><span class="meta">${formatDate(l.created_at)}</span></li>`).join("")
+      : `<li class="meta">Login tracking isn't wired up yet.</li>`;
+  }
+}
+
+function formatDate(iso) {
+  if (!iso) return "—";
+  try { return new Date(iso).toLocaleDateString(); } catch { return iso; }
 }
 
 // Poll quietly every 20s so numbers stay live without the admin refreshing.
@@ -375,6 +574,13 @@ function debouncedRender() {
   searchDebounce = setTimeout(renderMembersTable, 200);
 }
 
+function statusClass(text) {
+  if (["Paid", "Active"].includes(text)) return "ok";
+  if (["Expired", "Overdue", "Suspended"].includes(text)) return "bad";
+  if (text === "Pending") return "warn";
+  return "muted";
+}
+
 function renderMembersTable(highlightId) {
   const search = document.getElementById("searchInput").value.trim().toLowerCase();
   let members = allMembers;
@@ -388,28 +594,29 @@ function renderMembersTable(highlightId) {
 
   const tbody = document.getElementById("membersTableBody");
   if (!members.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="empty">No members match — add one from the Dashboard tab or adjust filters.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="empty">No members match — add one from the Dashboard tab or adjust filters.</td></tr>`;
     return;
   }
 
   tbody.innerHTML = members.map(m => `
-    <tr id="member-row-${m.id}" class="${m.id === highlightId ? 'row-new' : ''}">
+    <tr id="member-row-${m.id}" class="clickable-row ${m.id === highlightId ? 'row-new' : ''}" onclick="openPanel('${m.id}', event)">
       <td>${escapeHtml(m.name || "")}</td>
       <td>${escapeHtml(m.phone || "")}</td>
-      <td><span class="code-pill">${escapeHtml(m.login_code || "")}</span></td>
-      <td><span class="status-pill ${m.status === 'active' ? 'active' : 'suspended'}">${escapeHtml(m.status || "")}</span></td>
+      <td>${escapeHtml(m.membership_plan || "—")}</td>
+      <td><span class="status-text ${statusClass(m.admission_fee_status)}">${m.admission_fee_status || "Pending"}</span></td>
+      <td><span class="status-text ${statusClass(m.current_month_payment_status)}">${m.current_month_payment_status || "Pending"}</span></td>
       <td>${m.expiry_date ? escapeHtml(m.expiry_date) : "—"}</td>
+      <td><span class="status-text ${statusClass(m.membership_status)}">${m.membership_status || "Active"}</span></td>
       <td>
-        <div class="row-actions">
+        <div class="row-actions" onclick="event.stopPropagation()">
+          <button class="ghost small" onclick="openPanel('${m.id}')">View</button>
           <button class="ghost small" onclick="openEdit('${m.id}')">Edit</button>
+          <button class="ghost small" onclick="openMonthlyPay('${m.id}')">Payment</button>
+          <button class="ghost small" onclick="openPanel('${m.id}')">History</button>
           ${m.status === 'active'
             ? `<button class="ghost small warn" onclick="suspendMember('${m.id}')">Suspend</button>`
             : `<button class="ghost small" onclick="reactivateMember('${m.id}')">Reactivate</button>`}
           <button class="ghost small danger" onclick="deleteMember('${m.id}', '${escapeHtml(m.name || '')}')">Delete</button>
-          <button class="ghost small" onclick="regenerateCode('${m.id}')">Regen Code</button>
-          <button class="ghost small" onclick="openPay('${m.id}', '${escapeHtml(m.name || '')}')">Mark Paid</button>
-          <button class="ghost small" onclick="notWiredUp('Reset AI Credits')">Reset AI Credits</button>
-          <button class="ghost small" onclick="notWiredUp('View AI History')">AI History</button>
         </div>
       </td>
     </tr>
@@ -430,10 +637,6 @@ function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 }
 
-function notWiredUp(feature) {
-  showBanner("err", `${feature} isn't wired up yet — it depends on the AI engine in the member-facing app, not built in this dashboard.`);
-}
-
 function showBanner(type, message) {
   const el = document.getElementById("membersBanner");
   el.className = `banner ${type}`;
@@ -442,10 +645,7 @@ function showBanner(type, message) {
   setTimeout(() => { el.style.display = "none"; }, 5000);
 }
 
-// ── Suspend / Reactivate / Delete / Regenerate ──────────────────
-// Each of these now patches the row it just changed and re-renders
-// immediately, rather than re-fetching the entire member list from the
-// server every time — feels instant, and cuts API calls a lot.
+// ── Suspend / Reactivate / Delete ────────────────────────────────
 function rowBusy(id, busy) {
   const row = document.getElementById(`member-row-${id}`);
   if (row) row.classList.toggle("row-updating", busy);
@@ -457,7 +657,7 @@ async function suspendMember(id) {
   const data = await res.json();
   rowBusy(id, false);
   if (!res.ok) return showBanner("err", data.detail || "Could not suspend member");
-  patchLocalMember(id, { status: "suspended" });
+  patchLocalMember(id, { status: "suspended", membership_status: "Suspended" });
   renderMembersTable();
   showBanner("ok", "Member suspended.");
   loadDashboard(true);
@@ -470,7 +670,7 @@ async function reactivateMember(id) {
   rowBusy(id, false);
   if (!res.ok) return showBanner("err", data.detail || "Could not reactivate member");
   patchLocalMember(id, { status: "active" });
-  renderMembersTable();
+  loadMembers();
   showBanner("ok", "Member reactivated.");
   loadDashboard(true);
 }
@@ -487,17 +687,6 @@ async function deleteMember(id, name) {
   loadDashboard(true);
 }
 
-async function regenerateCode(id) {
-  rowBusy(id, true);
-  const res = await fetch(`${API_BASE}/admin/members/${id}/regenerate-code`, { method: "POST", headers: authHeaders() });
-  const data = await res.json();
-  rowBusy(id, false);
-  if (!res.ok) return showBanner("err", data.detail || "Could not regenerate code");
-  patchLocalMember(id, { login_code: data.login_code });
-  renderMembersTable();
-  showBanner("ok", `New login code: ${data.login_code}`);
-}
-
 // ── Edit modal ───────────────────────────────────────────────────
 let editingId = null;
 function openEdit(id) {
@@ -507,10 +696,21 @@ function openEdit(id) {
   document.getElementById("editName").value = "";
   document.getElementById("editPhone").value = "";
   document.getElementById("editEmail").value = "";
+  document.getElementById("editPlan").value = "";
+  document.getElementById("editMonthlyFee").value = "";
+  document.getElementById("editAdmissionFee").value = "";
   document.getElementById("editName").placeholder = m.name || "";
   document.getElementById("editPhone").placeholder = m.phone || "";
   document.getElementById("editEmail").placeholder = m.email || "";
+  document.getElementById("editPlan").placeholder = m.membership_plan || "";
+  document.getElementById("editMonthlyFee").placeholder = m.monthly_fee || "";
+  document.getElementById("editAdmissionFee").placeholder = m.admission_fee_amount || "";
   openModal("editModal");
+}
+
+function openEditFromPanel() {
+  closeModal("panelModal");
+  openEdit(currentPanelId);
 }
 
 async function submitEdit() {
@@ -519,9 +719,15 @@ async function submitEdit() {
   const name = document.getElementById("editName").value.trim();
   const phone = document.getElementById("editPhone").value.trim();
   const email = document.getElementById("editEmail").value.trim();
+  const plan = document.getElementById("editPlan").value.trim();
+  const monthlyFee = document.getElementById("editMonthlyFee").value;
+  const admissionFee = document.getElementById("editAdmissionFee").value;
   if (name) body.name = name;
   if (phone) body.phone = phone;
   if (email) body.email = email;
+  if (plan) body.membership_plan = plan;
+  if (monthlyFee) body.monthly_fee = parseFloat(monthlyFee);
+  if (admissionFee) body.admission_fee_amount = parseFloat(admissionFee);
 
   if (!Object.keys(body).length) { closeModal("editModal"); return; }
 
@@ -534,7 +740,7 @@ async function submitEdit() {
     if (!res.ok) throw new Error(data.detail || "Could not update member");
     closeModal("editModal");
     patchLocalMember(editingId, data.member);
-    renderMembersTable();
+    loadMembers();
     showBanner("ok", "Member updated.");
   } catch (err) {
     showBanner("err", err.message);
@@ -543,49 +749,186 @@ async function submitEdit() {
   }
 }
 
-// ── Payment modal ─────────────────────────────────────────────────
-let payingId = null;
-function openPay(id, name) {
-  payingId = id;
-  document.getElementById("paySub").textContent = `Recording a payment for ${name || "this member"}.`;
-  document.getElementById("payAmount").value = "";
-  document.getElementById("payMonths").value = "1";
-  document.getElementById("payPlan").value = "";
-  document.getElementById("payTxnId").value = "";
-  openModal("payModal");
+// ── Payment Panel ────────────────────────────────────────────────
+let currentPanelId = null;
+let currentPanelDetail = null;
+
+async function openPanel(id, evt) {
+  if (evt) evt.stopPropagation();
+  currentPanelId = id;
+  document.getElementById("panelName").textContent = "Loading…";
+  document.getElementById("panelHistoryBody").innerHTML = `<tr><td colspan="6" class="empty">Loading…</td></tr>`;
+  openModal("panelModal");
+
+  try {
+    const res = await fetch(`${API_BASE}/admin/members/${id}`, { headers: authHeaders() });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Could not load member details");
+    currentPanelDetail = data;
+    renderPanel(data);
+  } catch (err) {
+    showBanner("err", err.message);
+    closeModal("panelModal");
+  }
 }
 
-async function submitPayment() {
-  const btn = document.getElementById("paySaveBtn");
-  const amount = parseFloat(document.getElementById("payAmount").value);
-  const months = parseInt(document.getElementById("payMonths").value, 10);
-  const plan = document.getElementById("payPlan").value.trim();
-  const payment_method = document.getElementById("payMethod").value;
-  const transaction_id = document.getElementById("payTxnId").value.trim() || null;
+function renderPanel(data) {
+  const m = data.member;
+  document.getElementById("panelName").textContent = m.name || "Member";
+  document.getElementById("panelPhone").textContent = m.phone || "";
+  document.getElementById("panelPlan").textContent = m.membership_plan || "—";
+  document.getElementById("panelMonthlyFee").textContent = m.monthly_fee ? `Rs. ${m.monthly_fee}` : "—";
+  document.getElementById("panelAdmissionAmount").textContent = m.admission_fee_amount ? `Rs. ${m.admission_fee_amount}` : "—";
+  document.getElementById("panelAdmissionStatus").innerHTML = `<span class="status-text ${statusClass(m.admission_fee_status)}">${m.admission_fee_status}</span>`;
+  document.getElementById("panelBillingStatus").innerHTML = `<span class="status-text ${statusClass(m.current_month_payment_status)}">${m.current_month_payment_status}</span>`;
+  document.getElementById("panelMembershipStatus").innerHTML = `<span class="status-text ${statusClass(m.membership_status)}">${m.membership_status}</span>`;
+  document.getElementById("panelLastPayment").textContent = data.last_payment_date ? formatDate(data.last_payment_date) : "—";
+  document.getElementById("panelNextDue").textContent = data.next_due_date ? escapeHtml(data.next_due_date) : "—";
+  document.getElementById("panelExpiry").textContent = m.expiry_date ? escapeHtml(m.expiry_date) : "—";
+  document.getElementById("panelOutstanding").textContent = `Rs. ${data.outstanding_balance || 0}`;
 
-  if (!amount || !months || !plan) {
-    showBanner("err", "Amount, months, and plan are required.");
-    return;
-  }
+  const body = document.getElementById("panelHistoryBody");
+  const history = data.payment_history || [];
+  body.innerHTML = history.length
+    ? history.map(p => `
+        <tr>
+          <td>${formatDate(p.created_at)}</td>
+          <td>${p.payment_type === "admission" ? "Admission" : "Monthly"}</td>
+          <td>Rs. ${p.amount}</td>
+          <td>${escapeHtml(p.payment_method || "")}</td>
+          <td>${escapeHtml(p.transaction_id || "—")}</td>
+          <td>${escapeHtml(p.notes || "—")}</td>
+        </tr>
+      `).join("")
+    : `<tr><td colspan="6" class="empty">No payments recorded yet.</td></tr>`;
+}
+
+async function refreshPanel() {
+  if (currentPanelId) await openPanel(currentPanelId);
+  loadMembers();
+  loadDashboard(true);
+}
+
+// ── Mark Admission Fee Paid ──────────────────────────────────────
+function openAdmissionPay() {
+  const m = currentPanelDetail?.member;
+  document.getElementById("admissionPaySub").textContent = `Recording the admission fee for ${m?.name || "this member"}.`;
+  document.getElementById("admissionAmount").value = m?.admission_fee_amount || "";
+  document.getElementById("admissionTxnId").value = "";
+  document.getElementById("admissionNotes").value = "";
+  openModal("admissionPayModal");
+}
+
+async function submitAdmissionPay() {
+  const btn = document.getElementById("admissionPaySaveBtn");
+  const amount = parseFloat(document.getElementById("admissionAmount").value);
+  const payment_method = document.getElementById("admissionMethod").value;
+  const transaction_id = document.getElementById("admissionTxnId").value.trim() || null;
+  const notes = document.getElementById("admissionNotes").value.trim() || null;
+  if (!amount) { showBanner("err", "Amount is required."); return; }
 
   btn.disabled = true; btn.textContent = "Saving...";
   try {
-    const res = await fetch(`${API_BASE}/admin/members/${payingId}/payments`, {
+    const res = await fetch(`${API_BASE}/admin/members/${currentPanelId}/admission-fee/pay`, {
       method: "POST", headers: authHeaders(),
-      body: JSON.stringify({ amount, months, plan, payment_method, transaction_id }),
+      body: JSON.stringify({ amount, payment_method, transaction_id, notes }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Could not save payment");
-    closeModal("payModal");
-    patchLocalMember(payingId, { expiry_date: data.new_expiry_date });
-    renderMembersTable();
-    showBanner("ok", `Payment saved. New expiry date: ${data.new_expiry_date}.`);
-    loadDashboard(true);
+    closeModal("admissionPayModal");
+    showBanner("ok", "Admission fee marked as paid.");
+    await refreshPanel();
   } catch (err) {
     showBanner("err", err.message);
   } finally {
     btn.disabled = false; btn.textContent = "Save Payment";
   }
+}
+
+// ── Mark Monthly Payment Paid ─────────────────────────────────────
+function openMonthlyPay(id) {
+  if (id) { currentPanelId = id; closeModal("panelModal"); }
+  const m = currentPanelDetail?.member || allMembers.find(x => x.id === currentPanelId);
+  document.getElementById("monthlyPaySub").textContent = `Recording a membership payment for ${m?.name || "this member"}.`;
+  document.getElementById("monthlyAmount").value = m?.monthly_fee || "";
+  document.getElementById("monthlyMonths").value = "1";
+  document.getElementById("monthlyPlan").value = m?.membership_plan || "";
+  document.getElementById("monthlyTxnId").value = "";
+  document.getElementById("monthlyNotes").value = "";
+  openModal("monthlyPayModal");
+}
+
+async function submitMonthlyPay() {
+  const btn = document.getElementById("monthlyPaySaveBtn");
+  const amount = parseFloat(document.getElementById("monthlyAmount").value);
+  const months = parseInt(document.getElementById("monthlyMonths").value, 10);
+  const plan = document.getElementById("monthlyPlan").value.trim() || null;
+  const payment_method = document.getElementById("monthlyMethod").value;
+  const transaction_id = document.getElementById("monthlyTxnId").value.trim() || null;
+  const notes = document.getElementById("monthlyNotes").value.trim() || null;
+  if (!amount || !months) { showBanner("err", "Amount and months are required."); return; }
+
+  btn.disabled = true; btn.textContent = "Saving...";
+  try {
+    const res = await fetch(`${API_BASE}/admin/members/${currentPanelId}/monthly-payment/pay`, {
+      method: "POST", headers: authHeaders(),
+      body: JSON.stringify({ amount, months, plan, payment_method, transaction_id, notes }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Could not save payment");
+    closeModal("monthlyPayModal");
+    showBanner("ok", `Payment saved. New expiry date: ${data.new_expiry_date}.`);
+    await refreshPanel();
+    if (!document.getElementById("panelModal").classList.contains("open")) await openPanel(currentPanelId);
+  } catch (err) {
+    showBanner("err", err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "Save Payment";
+  }
+}
+
+// ── Extend Membership ─────────────────────────────────────────────
+function openExtend() {
+  document.getElementById("extendMonths").value = "1";
+  document.getElementById("extendNotes").value = "";
+  openModal("extendModal");
+}
+
+async function submitExtend() {
+  const btn = document.getElementById("extendSaveBtn");
+  const months = parseInt(document.getElementById("extendMonths").value, 10);
+  const notes = document.getElementById("extendNotes").value.trim() || null;
+  if (!months) { showBanner("err", "Months is required."); return; }
+
+  btn.disabled = true; btn.textContent = "Saving...";
+  try {
+    const res = await fetch(`${API_BASE}/admin/members/${currentPanelId}/extend`, {
+      method: "POST", headers: authHeaders(),
+      body: JSON.stringify({ months, notes }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Could not extend membership");
+    closeModal("extendModal");
+    showBanner("ok", `Membership extended. New expiry date: ${data.new_expiry_date}.`);
+    await refreshPanel();
+  } catch (err) {
+    showBanner("err", err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "Extend";
+  }
+}
+
+// ── Invoice ─────────────────────────────────────────────────────
+function downloadInvoice() {
+  const url = `${API_BASE}/admin/members/${currentPanelId}/invoice`;
+  fetch(url, { headers: authHeaders() })
+    .then(res => res.text())
+    .then(html => {
+      const w = window.open("", "_blank");
+      w.document.write(html);
+      w.document.close();
+    })
+    .catch(() => showBanner("err", "Could not generate invoice."));
 }
 
 // ── Modal helpers ───────────────────────────────────────────────
