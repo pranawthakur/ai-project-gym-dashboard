@@ -233,6 +233,10 @@ tr.clickable-row:hover td { background:rgba(139,92,246,.05); }
               <button class="recent-tab" data-growth="revenue">Revenue</button>
             </div>
           </div>
+          <div class="recent-tabs" style="margin-top:6px;">
+            <button class="recent-tab" data-growth-period="weekly">Weekly</button>
+            <button class="recent-tab active" data-growth-period="monthly">Monthly</button>
+          </div>
           <div style="position:relative; height:240px;">
             <canvas id="growthChart"></canvas>
           </div>
@@ -264,6 +268,26 @@ tr.clickable-row:hover td { background:rgba(139,92,246,.05); }
             <div>
               <label class="lbl">Admission Fee (Rs., Optional)</label>
               <input type="number" id="memberAdmissionFee" min="0" step="1" placeholder="e.g. 500" />
+            </div>
+            <div>
+              <label class="lbl">Duration (Months)</label>
+              <input type="number" id="memberMonths" min="1" step="1" value="1" />
+            </div>
+            <div>
+              <label class="lbl">Payment Method</label>
+              <select id="memberPaymentMethod">
+                <option value="Cash">Cash</option>
+                <option value="UPI">UPI</option>
+                <option value="Card">Card</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+              </select>
+            </div>
+            <div>
+              <label class="lbl">Transaction ID (Optional)</label>
+              <input type="text" id="memberTransactionId" placeholder="e.g. UPI ref no." />
+            </div>
+            <div style="grid-column: 1 / -1;" class="meta">
+              Any fee entered above is recorded as paid immediately — no separate payment step needed.
             </div>
             <div style="grid-column: 1 / -1;">
               <button type="submit" class="primary" id="addMemberBtn">Save Member</button>
@@ -993,6 +1017,9 @@ document.getElementById("addMemberForm").addEventListener("submit", async (e) =>
           ? parseFloat(document.getElementById("memberMonthlyFee").value) : null,
         admission_fee_amount: document.getElementById("memberAdmissionFee").value
           ? parseFloat(document.getElementById("memberAdmissionFee").value) : null,
+        months: parseInt(document.getElementById("memberMonths").value, 10) || 1,
+        payment_method: document.getElementById("memberPaymentMethod").value,
+        transaction_id: document.getElementById("memberTransactionId").value || null,
       }),
     });
     const data = await res.json();
@@ -1005,6 +1032,8 @@ document.getElementById("addMemberForm").addEventListener("submit", async (e) =>
     document.getElementById("memberPlan").value = "";
     document.getElementById("memberMonthlyFee").value = "";
     document.getElementById("memberAdmissionFee").value = "";
+    document.getElementById("memberMonths").value = "1";
+    document.getElementById("memberTransactionId").value = "";
 
     // Drop the new member straight into local state and re-render the
     // members table immediately — no waiting on a fresh fetch. If the
@@ -1026,6 +1055,7 @@ document.getElementById("addMemberForm").addEventListener("submit", async (e) =>
 let growthChart = null;
 let growthData = null;
 let growthMetric = "members";
+let growthPeriod = "monthly";
 
 document.querySelectorAll("[data-growth]").forEach(btn => {
   btn.addEventListener("click", () => {
@@ -1036,9 +1066,19 @@ document.querySelectorAll("[data-growth]").forEach(btn => {
   });
 });
 
+document.querySelectorAll("[data-growth-period]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("[data-growth-period]").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    growthPeriod = btn.dataset.growthPeriod;
+    loadGrowthAnalytics();
+  });
+});
+
 async function loadGrowthAnalytics() {
   try {
-    const res = await fetch(`${API_BASE}/admin/analytics/growth?months=6`, { headers: authHeaders() });
+    const qs = growthPeriod === "weekly" ? "period=weekly&weeks=8" : "period=monthly&months=6";
+    const res = await fetch(`${API_BASE}/admin/analytics/growth?${qs}`, { headers: authHeaders() });
     if (!res.ok) throw new Error("growth analytics fetch failed");
     growthData = await res.json();
     renderGrowthChart();
@@ -1052,10 +1092,17 @@ function monthLabel(ym) {
   return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "short", year: "2-digit" });
 }
 
+function weekLabel(isoDate) {
+  const d = new Date(isoDate + "T00:00:00");
+  return "Wk of " + d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 function renderGrowthChart() {
   if (!growthData) return;
   const ctx = document.getElementById("growthChart").getContext("2d");
-  const labels = growthData.months.map(monthLabel);
+  const labels = growthData.period === "weekly"
+    ? growthData.months.map(weekLabel)
+    : growthData.months.map(monthLabel);
   const isRevenue = growthMetric === "revenue";
   const values = isRevenue ? growthData.revenue : growthData.new_members;
 

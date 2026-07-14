@@ -302,6 +302,12 @@ class AddMemberRequest(BaseModel):
     membership_plan: str | None = None
     monthly_fee: float | None = None
     admission_fee_amount: float | None = None
+    # Any fee amount entered on this form is treated as already collected —
+    # payment_method/months drive the auto-recorded payment(s) below so the
+    # member never lands in "Pending" and no separate payment step is needed.
+    payment_method: str = "Cash"
+    transaction_id: str | None = None
+    months: int = 1
 
 
 def generate_login_code() -> str:
@@ -346,9 +352,62 @@ def add_member(body: AddMemberRequest, admin: dict = Depends(require_role("gym_a
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"members insert failed: {e}")
 
+    member = result.data[0]
+    today = datetime.now(timezone.utc).date()
+    payments_created = []
+
+    # Any fee amounts entered on the Add Member form are collected right
+    # there and then — auto-record them as payments immediately instead of
+    # leaving the member sitting in "Pending" until someone does a second,
+    # separate "record payment" step.
+    try:
+        if body.admission_fee_amount:
+            adm_payment = supabase.table("payments").insert({
+                "gym_id": gym_id,
+                "member_id": member["id"],
+                "amount": body.admission_fee_amount,
+                "plan": "Admission Fee",
+                "months": 0,
+                "payment_method": body.payment_method,
+                "transaction_id": body.transaction_id,
+                "payment_type": "admission",
+            }).execute()
+            payments_created.append(adm_payment.data[0])
+
+            updated = supabase.table("members").update({
+                "admission_fee_paid": True,
+            }).eq("id", member["id"]).execute()
+            member = updated.data[0]
+
+        if body.monthly_fee:
+            duration_months = max(1, body.months or 1)
+            expiry_date = (today + timedelta(days=30 * duration_months)).isoformat()
+
+            mon_payment = supabase.table("payments").insert({
+                "gym_id": gym_id,
+                "member_id": member["id"],
+                "amount": body.monthly_fee * duration_months,
+                "plan": body.membership_plan or "Membership",
+                "months": duration_months,
+                "payment_method": body.payment_method,
+                "transaction_id": body.transaction_id,
+                "payment_type": "monthly",
+            }).execute()
+            payments_created.append(mon_payment.data[0])
+
+            updated = supabase.table("members").update({
+                "expiry_date": expiry_date,
+                "last_payment_date": today.isoformat(),
+            }).eq("id", member["id"]).execute()
+            member = updated.data[0]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"auto payment recording failed: {e}")
+
+    member.update(compute_member_status(member, today))
+
     # TODO: trigger WhatsApp send here once messaging provider is wired up
 
-    return {"member": result.data[0], "login_code": code}
+    return {"member": member, "login_code": code, "payments": payments_created}
 
 
 # ── Member list with search/filter ──────────────────────────────────────
@@ -760,66 +819,90 @@ def generate_invoice(member_id: str, payment_id: str | None = None, admin: dict 
 
 
 # ── Growth Analytics ─────────────────────────────────────────────────────
-# Monthly new-members and revenue series for the last `months` calendar
-# months (default 6), oldest first — feeds the Gym Growth chart on the
-# dashboard. Computed from members/payments already loaded elsewhere in
-# this file, so it degrades to zeros per month rather than failing if a
-# table is briefly unreachable.
+# New-members and revenue series, oldest first — feeds the Gym Growth chart
+# on the dashboard. period="monthly" buckets by calendar month (default,
+# `months` controls how many); period="weekly" buckets by Monday-start week
+# (`weeks` controls how many). Computed from members/payments already
+# loaded elsewhere in this file, so it degrades to zeros per bucket rather
+# than failing if a table is briefly unreachable.
 @app.get("/admin/analytics/growth")
-def growth_analytics(months: int = 6, admin: dict = Depends(require_role("gym_admin"))):
+def growth_analytics(
+    period: str = "monthly",
+    months: int = 6,
+    weeks: int = 8,
+    admin: dict = Depends(require_role("gym_admin")),
+):
     gym_id = admin["gym_id"]
-    months = max(1, min(months, 24))
-
+    period = period if period in ("monthly", "weekly") else "monthly"
     today = datetime.now(timezone.utc).date()
-    # Build the list of month buckets, oldest first, e.g. ["2026-02", ..., "2026-07"]
-    buckets = []
-    y, m = today.year, today.month
-    for _ in range(months):
-        buckets.append(f"{y:04d}-{m:02d}")
-        m -= 1
-        if m == 0:
-            m = 12
-            y -= 1
-    buckets.reverse()
-    bucket_start = buckets[0] + "-01"
+
+    if period == "weekly":
+        weeks = max(1, min(weeks, 52))
+        this_week_start = today - timedelta(days=today.weekday())  # Monday
+        bucket_starts = [this_week_start - timedelta(weeks=(weeks - 1 - i)) for i in range(weeks)]
+        bucket_keys = [d.isoformat() for d in bucket_starts]
+        bucket_start_date = bucket_keys[0]
+
+        def bucket_key_for(date_str: str):
+            d = datetime.fromisoformat(date_str[:10]).date()
+            idx = (d - bucket_starts[0]).days // 7
+            return bucket_keys[idx] if 0 <= idx < weeks else None
+    else:
+        months = max(1, min(months, 24))
+        buckets = []
+        y, m = today.year, today.month
+        for _ in range(months):
+            buckets.append(f"{y:04d}-{m:02d}")
+            m -= 1
+            if m == 0:
+                m = 12
+                y -= 1
+        buckets.reverse()
+        bucket_keys = buckets
+        bucket_start_date = buckets[0] + "-01"
+
+        def bucket_key_for(date_str: str):
+            key = date_str[:7]
+            return key if key in bucket_keys else None
 
     try:
         members_res = supabase.table("members").select("created_at") \
-            .eq("gym_id", gym_id).gte("created_at", bucket_start).execute()
+            .eq("gym_id", gym_id).gte("created_at", bucket_start_date).execute()
         member_rows = members_res.data or []
     except Exception:
         member_rows = []
 
     try:
         payments_res = supabase.table("payments").select("amount,created_at") \
-            .eq("gym_id", gym_id).gte("created_at", bucket_start).execute()
+            .eq("gym_id", gym_id).gte("created_at", bucket_start_date).execute()
         payment_rows = payments_res.data or []
     except Exception:
         payment_rows = []
 
-    new_members = {b: 0 for b in buckets}
-    revenue = {b: 0 for b in buckets}
+    new_members = {b: 0 for b in bucket_keys}
+    revenue = {b: 0 for b in bucket_keys}
 
     for row in member_rows:
         created_at = row.get("created_at")
         if not created_at:
             continue
-        key = created_at[:7]
-        if key in new_members:
+        key = bucket_key_for(created_at)
+        if key:
             new_members[key] += 1
 
     for row in payment_rows:
         created_at = row.get("created_at")
         if not created_at:
             continue
-        key = created_at[:7]
-        if key in revenue:
+        key = bucket_key_for(created_at)
+        if key:
             revenue[key] += row.get("amount") or 0
 
     return {
-        "months": buckets,
-        "new_members": [new_members[b] for b in buckets],
-        "revenue": [revenue[b] for b in buckets],
+        "period": period,
+        "months": bucket_keys,
+        "new_members": [new_members[b] for b in bucket_keys],
+        "revenue": [revenue[b] for b in bucket_keys],
     }
 
 
