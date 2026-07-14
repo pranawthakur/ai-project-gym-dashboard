@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Gym Admin Dashboard — GymCoach Studio</title>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
 :root {
   --bg: #0a0714; --fg: #f8fafc; --muted: #94a3b8; --card: #150f24;
@@ -225,6 +226,19 @@ tr.clickable-row:hover td { background:rgba(139,92,246,.05); }
         </div>
 
         <div class="card">
+          <div class="card-head">
+            <h3>Gym Growth</h3>
+            <div class="recent-tabs">
+              <button class="recent-tab active" data-growth="members">New Members</button>
+              <button class="recent-tab" data-growth="revenue">Revenue</button>
+            </div>
+          </div>
+          <div style="position:relative; height:240px;">
+            <canvas id="growthChart"></canvas>
+          </div>
+        </div>
+
+        <div class="card">
           <div class="card-head"><h3>Add Member</h3></div>
           <form id="addMemberForm" class="grid c3">
             <div>
@@ -238,6 +252,18 @@ tr.clickable-row:hover td { background:rgba(139,92,246,.05); }
             <div>
               <label class="lbl">Email (Optional)</label>
               <input type="email" id="memberEmail" placeholder="member@example.com" />
+            </div>
+            <div>
+              <label class="lbl">Membership Plan (Optional)</label>
+              <input type="text" id="memberPlan" placeholder="e.g. Standard" />
+            </div>
+            <div>
+              <label class="lbl">Monthly Fee (Rs., Optional)</label>
+              <input type="number" id="memberMonthlyFee" min="0" step="1" placeholder="e.g. 1500" />
+            </div>
+            <div>
+              <label class="lbl">Admission Fee (Rs., Optional)</label>
+              <input type="number" id="memberAdmissionFee" min="0" step="1" placeholder="e.g. 500" />
             </div>
             <div style="grid-column: 1 / -1;">
               <button type="submit" class="primary" id="addMemberBtn">Save Member</button>
@@ -962,6 +988,11 @@ document.getElementById("addMemberForm").addEventListener("submit", async (e) =>
         name: document.getElementById("memberName").value,
         phone: document.getElementById("memberPhone").value,
         email: document.getElementById("memberEmail").value || null,
+        membership_plan: document.getElementById("memberPlan").value || null,
+        monthly_fee: document.getElementById("memberMonthlyFee").value
+          ? parseFloat(document.getElementById("memberMonthlyFee").value) : null,
+        admission_fee_amount: document.getElementById("memberAdmissionFee").value
+          ? parseFloat(document.getElementById("memberAdmissionFee").value) : null,
       }),
     });
     const data = await res.json();
@@ -971,6 +1002,9 @@ document.getElementById("addMemberForm").addEventListener("submit", async (e) =>
     document.getElementById("codeResult").style.display = "block";
     setTimeout(() => { document.getElementById("codeResult").style.display = "none"; }, 8000);
     document.getElementById("addMemberForm").reset();
+    document.getElementById("memberPlan").value = "";
+    document.getElementById("memberMonthlyFee").value = "";
+    document.getElementById("memberAdmissionFee").value = "";
 
     // Drop the new member straight into local state and re-render the
     // members table immediately — no waiting on a fresh fetch. If the
@@ -988,8 +1022,72 @@ document.getElementById("addMemberForm").addEventListener("submit", async (e) =>
   }
 });
 
+// ── Gym Growth chart ─────────────────────────────────────────────
+let growthChart = null;
+let growthData = null;
+let growthMetric = "members";
+
+document.querySelectorAll("[data-growth]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("[data-growth]").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    growthMetric = btn.dataset.growth;
+    renderGrowthChart();
+  });
+});
+
+async function loadGrowthAnalytics() {
+  try {
+    const res = await fetch(`${API_BASE}/admin/analytics/growth?months=6`, { headers: authHeaders() });
+    if (!res.ok) throw new Error("growth analytics fetch failed");
+    growthData = await res.json();
+    renderGrowthChart();
+  } catch (err) {
+    // chart is a nice-to-have — a failed fetch shouldn't disrupt the rest of the dashboard
+  }
+}
+
+function monthLabel(ym) {
+  const [y, m] = ym.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "short", year: "2-digit" });
+}
+
+function renderGrowthChart() {
+  if (!growthData) return;
+  const ctx = document.getElementById("growthChart").getContext("2d");
+  const labels = growthData.months.map(monthLabel);
+  const isRevenue = growthMetric === "revenue";
+  const values = isRevenue ? growthData.revenue : growthData.new_members;
+
+  if (growthChart) growthChart.destroy();
+  growthChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        label: isRevenue ? "Revenue (Rs.)" : "New Members",
+        data: values,
+        backgroundColor: "rgba(168,85,247,.55)",
+        borderColor: "rgba(168,85,247,1)",
+        borderWidth: 1,
+        borderRadius: 6,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(139,92,246,.1)" } },
+        y: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(139,92,246,.1)" }, beginAtZero: true },
+      },
+    },
+  });
+}
+
 loadDashboard();
 loadMembers();
+loadGrowthAnalytics();
 startDashboardPolling();
 </script>
 </body>

@@ -299,6 +299,9 @@ class AddMemberRequest(BaseModel):
     name: str
     phone: str
     email: str | None = None
+    membership_plan: str | None = None
+    monthly_fee: float | None = None
+    admission_fee_amount: float | None = None
 
 
 def generate_login_code() -> str:
@@ -324,14 +327,22 @@ def add_member(body: AddMemberRequest, admin: dict = Depends(require_role("gym_a
         raise HTTPException(status_code=500, detail=f"login_code collision check failed: {e}")
 
     try:
-        result = supabase.table("members").insert({
+        insert_fields = {
             "gym_id": gym_id,
             "name": body.name,
             "phone": body.phone,
             "email": body.email,
             "login_code": code,
             "status": "active",
-        }).execute()
+        }
+        if body.membership_plan:
+            insert_fields["membership_plan"] = body.membership_plan
+        if body.monthly_fee is not None:
+            insert_fields["monthly_fee"] = body.monthly_fee
+        if body.admission_fee_amount is not None:
+            insert_fields["admission_fee_amount"] = body.admission_fee_amount
+
+        result = supabase.table("members").insert(insert_fields).execute()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"members insert failed: {e}")
 
@@ -746,6 +757,70 @@ def generate_invoice(member_id: str, payment_id: str | None = None, admin: dict 
     </body></html>
     """
     return HTMLResponse(content=html)
+
+
+# ── Growth Analytics ─────────────────────────────────────────────────────
+# Monthly new-members and revenue series for the last `months` calendar
+# months (default 6), oldest first — feeds the Gym Growth chart on the
+# dashboard. Computed from members/payments already loaded elsewhere in
+# this file, so it degrades to zeros per month rather than failing if a
+# table is briefly unreachable.
+@app.get("/admin/analytics/growth")
+def growth_analytics(months: int = 6, admin: dict = Depends(require_role("gym_admin"))):
+    gym_id = admin["gym_id"]
+    months = max(1, min(months, 24))
+
+    today = datetime.now(timezone.utc).date()
+    # Build the list of month buckets, oldest first, e.g. ["2026-02", ..., "2026-07"]
+    buckets = []
+    y, m = today.year, today.month
+    for _ in range(months):
+        buckets.append(f"{y:04d}-{m:02d}")
+        m -= 1
+        if m == 0:
+            m = 12
+            y -= 1
+    buckets.reverse()
+    bucket_start = buckets[0] + "-01"
+
+    try:
+        members_res = supabase.table("members").select("created_at") \
+            .eq("gym_id", gym_id).gte("created_at", bucket_start).execute()
+        member_rows = members_res.data or []
+    except Exception:
+        member_rows = []
+
+    try:
+        payments_res = supabase.table("payments").select("amount,created_at") \
+            .eq("gym_id", gym_id).gte("created_at", bucket_start).execute()
+        payment_rows = payments_res.data or []
+    except Exception:
+        payment_rows = []
+
+    new_members = {b: 0 for b in buckets}
+    revenue = {b: 0 for b in buckets}
+
+    for row in member_rows:
+        created_at = row.get("created_at")
+        if not created_at:
+            continue
+        key = created_at[:7]
+        if key in new_members:
+            new_members[key] += 1
+
+    for row in payment_rows:
+        created_at = row.get("created_at")
+        if not created_at:
+            continue
+        key = created_at[:7]
+        if key in revenue:
+            revenue[key] += row.get("amount") or 0
+
+    return {
+        "months": buckets,
+        "new_members": [new_members[b] for b in buckets],
+        "revenue": [revenue[b] for b in buckets],
+    }
 
 
 # ── Export members to Excel ─────────────────────────────────────────────
