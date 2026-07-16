@@ -22,7 +22,10 @@ begin
     end if;
 end $$;
 
--- Same defensive pattern for admins, in case it also pre-existed partially
+-- signup_slug: written by POST /admin/signup (main.py) alongside slug.
+-- Was previously only present on the live table via a manual ALTER outside
+-- this file — adding it here so schema.sql is reproducible from scratch.
+alter table gyms add column if not exists signup_slug text not null default '';
 create table if not exists admins (
     id uuid primary key default gen_random_uuid()
 );

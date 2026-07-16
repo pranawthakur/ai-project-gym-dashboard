@@ -130,6 +130,7 @@ class SignupRequest(BaseModel):
     gym_name: str
     admin_email: str
     admin_password: str
+    signup_secret: str
 
 
 def generate_placeholder_slug() -> str:
@@ -141,6 +142,9 @@ def generate_placeholder_slug() -> str:
 
 @app.post("/admin/signup")
 def admin_signup(body: SignupRequest):
+    if body.signup_secret != settings.signup_secret:
+        raise HTTPException(status_code=403, detail="Invalid signup secret.")
+
     placeholder_slug = generate_placeholder_slug()
 
     try:

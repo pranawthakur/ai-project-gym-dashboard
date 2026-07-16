@@ -74,13 +74,16 @@ button.submit:disabled { opacity:.6; cursor:not-allowed; transform:none; }
     <label class="lbl">Admin Password</label>
     <input type="password" id="signupPassword" required placeholder="••••••••" />
 
+    <label class="lbl">Signup Secret</label>
+    <input type="password" id="signupSecret" required placeholder="dev signup secret" />
+
     <button type="submit" class="submit" id="signupBtn" style="background:transparent; border:1px solid var(--border); box-shadow:none;">Create Gym + Admin</button>
     <p class="error" id="signupError"></p>
   </form>
 </div>
 
 <script>
-const API_BASE = "https://ai-project-gym-dashboard.onrender.com";
+const API_BASE = "";
 
 document.getElementById("toggleSignup").addEventListener("click", (e) => {
   e.preventDefault();
@@ -104,6 +107,7 @@ document.getElementById("signupForm").addEventListener("submit", async (e) => {
         gym_name: document.getElementById("signupGymName").value,
         admin_email: document.getElementById("signupEmail").value,
         admin_password: document.getElementById("signupPassword").value,
+        signup_secret: document.getElementById("signupSecret").value,
       }),
     });
     const data = await res.json();
