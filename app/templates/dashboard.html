@@ -295,6 +295,10 @@ tr.clickable-row:hover td { background:rgba(139,92,246,.05); }
           </form>
           <div class="code-result" id="codeResult">
             Login code generated: <b id="codeValue"></b>
+            <div id="loginLinkWrap" style="margin-top:8px; display:none;">
+              Login link: <a id="loginLinkValue" target="_blank" rel="noopener"></a>
+              <button type="button" id="copyLoginLinkBtn" style="margin-left:8px;">Copy</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1026,8 +1030,18 @@ document.getElementById("addMemberForm").addEventListener("submit", async (e) =>
     if (!res.ok) throw new Error(data.detail || "Could not add member");
 
     document.getElementById("codeValue").textContent = data.login_code;
+    const linkWrap = document.getElementById("loginLinkWrap");
+    if (data.login_link) {
+      const linkEl = document.getElementById("loginLinkValue");
+      linkEl.href = data.login_link;
+      linkEl.textContent = data.login_link;
+      linkWrap.style.display = "block";
+    } else {
+      linkWrap.style.display = "none";
+    }
     document.getElementById("codeResult").style.display = "block";
-    setTimeout(() => { document.getElementById("codeResult").style.display = "none"; }, 8000);
+    // Longer than 8s now that there's a link to copy, not just a code to read.
+    setTimeout(() => { document.getElementById("codeResult").style.display = "none"; }, 20000);
     document.getElementById("addMemberForm").reset();
     document.getElementById("memberPlan").value = "";
     document.getElementById("memberMonthlyFee").value = "";
@@ -1049,6 +1063,17 @@ document.getElementById("addMemberForm").addEventListener("submit", async (e) =>
     btn.disabled = false;
     btn.textContent = "Save Member";
   }
+});
+
+document.getElementById("copyLoginLinkBtn").addEventListener("click", () => {
+  const link = document.getElementById("loginLinkValue").textContent;
+  if (!link) return;
+  navigator.clipboard.writeText(link).then(() => {
+    const btn = document.getElementById("copyLoginLinkBtn");
+    const original = btn.textContent;
+    btn.textContent = "Copied!";
+    setTimeout(() => { btn.textContent = original; }, 1500);
+  });
 });
 
 // ── Gym Growth chart ─────────────────────────────────────────────
@@ -1136,6 +1161,26 @@ loadDashboard();
 loadMembers();
 loadGrowthAnalytics();
 startDashboardPolling();
+
+// One-shot onboarding banner: set by login.html right after /admin/signup
+// returns a login_link. Read once, then clear — this should never show
+// again on a normal day-to-day login.
+(function showOnboardingLinkOnce() {
+  const link = localStorage.getItem("onboarding_login_link");
+  if (!link) return;
+  localStorage.removeItem("onboarding_login_link");
+  const banner = document.createElement("div");
+  banner.className = "code-result";
+  banner.style.cssText = "position:fixed; top:16px; right:16px; z-index:9999; max-width:420px;";
+  banner.innerHTML = `Welcome! Your member login link: <a href="${link}" target="_blank" rel="noopener">${link}</a>
+    <button type="button" style="margin-left:8px;">Copy</button>
+    <button type="button" style="margin-left:8px;" onclick="this.closest('div').remove()">Dismiss</button>`;
+  banner.querySelectorAll("button")[0].addEventListener("click", () => {
+    navigator.clipboard.writeText(link);
+  });
+  document.body.appendChild(banner);
+})();
+
 </script>
 </body>
 </html>

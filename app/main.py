@@ -176,7 +176,22 @@ def admin_signup(body: SignupRequest):
         raise HTTPException(status_code=500, detail=f"admins insert failed: {e}")
 
     token = create_token(sub=admin.data[0]["id"], role="gym_admin", gym_id=gym_id)
-    return {"access_token": token, "role": "gym_admin", "gym_id": gym_id}
+
+    # Surface the slug/link right away at onboarding too, not just later at
+    # Add Member — same construction as add_member's login_link, using the
+    # placeholder_slug written above (no extra DB round trip needed since
+    # we already have it in hand here).
+    login_link = None
+    if settings.member_frontend_url:
+        login_link = f"{settings.member_frontend_url.rstrip('/')}/login.html.html?gym={placeholder_slug}"
+
+    return {
+        "access_token": token,
+        "role": "gym_admin",
+        "gym_id": gym_id,
+        "gym_slug": placeholder_slug,
+        "login_link": login_link,
+    }
 
 
 # ── Dashboard ────────────────────────────────────────────────────────────
@@ -411,7 +426,24 @@ def add_member(body: AddMemberRequest, admin: dict = Depends(require_role("gym_a
 
     # TODO: trigger WhatsApp send here once messaging provider is wired up
 
-    return {"member": member, "login_code": code, "payments": payments_created}
+    # A bare login code isn't enough for the member to log in — the
+    # member-facing app resolves gym via a ?gym=<slug> param and falls
+    # back to a hardcoded demo gym if it's missing (see
+    # ai-project-login/app/gym_scope.py). Build the real link here so
+    # "Add Member" hands out something that actually works, not just the
+    # code. member_frontend_url is a placeholder Vercel URL for now —
+    # swap it for a real domain later without touching this logic.
+    login_link = None
+    if settings.member_frontend_url:
+        try:
+            gym_row = supabase.table("gyms").select("slug").eq("id", gym_id).limit(1).execute()
+            gym_slug = gym_row.data[0]["slug"] if gym_row.data else None
+        except Exception:
+            gym_slug = None
+        if gym_slug:
+            login_link = f"{settings.member_frontend_url.rstrip('/')}/login.html.html?gym={gym_slug}"
+
+    return {"member": member, "login_code": code, "login_link": login_link, "payments": payments_created}
 
 
 # ── Member list with search/filter ──────────────────────────────────────

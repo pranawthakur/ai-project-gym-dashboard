@@ -116,6 +116,12 @@ document.getElementById("signupForm").addEventListener("submit", async (e) => {
     localStorage.setItem("admin_token", data.access_token);
     localStorage.setItem("admin_role", data.role);
     localStorage.setItem("admin_gym_id", data.gym_id || "");
+    // One-shot flag: dashboard.html checks this on load, shows the link
+    // once, then clears it. Not stored under a permanent key since it's
+    // only relevant right after signup, not on every future login.
+    if (data.login_link) {
+      localStorage.setItem("onboarding_login_link", data.login_link);
+    }
     window.location.href = "/dashboard.html";
   } catch (err) {
     errorMsg.textContent = err.message;
