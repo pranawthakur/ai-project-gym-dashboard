@@ -181,6 +181,17 @@ tr.clickable-row:hover td { background:rgba(139,92,246,.05); }
       <div class="view active" id="viewDashboard">
         <h1>Dashboard <span class="live-dot" title="Live"></span></h1>
 
+        <div class="card" id="gymUrlCard" style="margin-bottom:16px; display:none;">
+          <div class="card-head"><h3>Your Gym's Member Sign-Up Link</h3></div>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span>This link is fixed for your gym — share it with members so they can sign up and log in.</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
+            <a id="gymUrlLink" href="#" target="_blank" rel="noopener" style="word-break:break-all;">—</a>
+            <button type="button" id="copyGymUrlBtn">Copy</button>
+          </div>
+        </div>
+
         <div class="section-grid">
           <div class="card">
             <div class="card-head"><h3>Membership Overview</h3></div>
@@ -537,6 +548,14 @@ async function loadDashboard(silent) {
     if (!res.ok) throw new Error("dashboard fetch failed");
     const data = await res.json();
     lastDashboardData = data;
+
+    if (data.gym_login_link) {
+      const gymUrlCard = document.getElementById("gymUrlCard");
+      const gymUrlLink = document.getElementById("gymUrlLink");
+      gymUrlCard.style.display = "";
+      gymUrlLink.href = data.gym_login_link;
+      gymUrlLink.textContent = data.gym_login_link;
+    }
 
     setStat("statTotalMembers", data.membership.total_members);
     setStat("statActive", data.membership.active_members);
@@ -1098,6 +1117,17 @@ document.getElementById("copyLoginLinkBtn").addEventListener("click", () => {
   if (!link) return;
   navigator.clipboard.writeText(link).then(() => {
     const btn = document.getElementById("copyLoginLinkBtn");
+    const original = btn.textContent;
+    btn.textContent = "Copied!";
+    setTimeout(() => { btn.textContent = original; }, 1500);
+  });
+});
+
+document.getElementById("copyGymUrlBtn").addEventListener("click", () => {
+  const link = document.getElementById("gymUrlLink").textContent;
+  if (!link || link === "—") return;
+  navigator.clipboard.writeText(link).then(() => {
+    const btn = document.getElementById("copyGymUrlBtn");
     const original = btn.textContent;
     btn.textContent = "Copied!";
     setTimeout(() => { btn.textContent = original; }, 1500);

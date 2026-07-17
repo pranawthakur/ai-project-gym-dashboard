@@ -205,6 +205,19 @@ def dashboard(admin: dict = Depends(require_role("gym_admin"))):
     today = datetime.now(timezone.utc).date()
     month_start = today.replace(day=1)
 
+    # ── Gym URL (fixed per gym, same slug used for every member's login_link) ──
+    gym_name = None
+    gym_login_link = None
+    try:
+        gym_row = supabase.table("gyms").select("name, slug").eq("id", gym_id).limit(1).execute()
+        if gym_row.data:
+            gym_name = gym_row.data[0].get("name")
+            gym_slug = gym_row.data[0].get("slug")
+            if gym_slug and settings.member_frontend_url:
+                gym_login_link = f"{settings.member_frontend_url.rstrip('/')}/login.html.html?gym={gym_slug}"
+    except Exception:
+        pass
+
     # ── Membership Overview ──
     try:
         all_members = supabase.table("members").select("*").eq("gym_id", gym_id).execute()
@@ -279,6 +292,8 @@ def dashboard(admin: dict = Depends(require_role("gym_admin"))):
 
     return {
         "gym_id": gym_id,
+        "gym_name": gym_name,
+        "gym_login_link": gym_login_link,
         "membership": {
             "total_members": total_members,
             "active_members": active_members,
