@@ -376,7 +376,7 @@ tr.clickable-row:hover td { background:rgba(139,92,246,.05); }
       <h4>Membership</h4>
       <div class="panel-fields">
         <div class="panel-field"><div class="k">Membership Plan</div><div class="v" id="panelPlan">—</div></div>
-        <div class="k">Monthly Fee</div><div class="v" id="panelMonthlyFee">—</div>
+        <div class="panel-field"><div class="k">Monthly Fee</div><div class="v" id="panelMonthlyFee">—</div></div>
         <div class="panel-field"><div class="k">Admission Fee Amount</div><div class="v" id="panelAdmissionAmount">—</div></div>
         <div class="panel-field"><div class="k">Admission Fee Status</div><div class="v" id="panelAdmissionStatus">—</div></div>
         <div class="panel-field"><div class="k">Current Billing Status</div><div class="v" id="panelBillingStatus">—</div></div>
@@ -385,6 +385,13 @@ tr.clickable-row:hover td { background:rgba(139,92,246,.05); }
         <div class="panel-field"><div class="k">Next Due Date</div><div class="v" id="panelNextDue">—</div></div>
         <div class="panel-field"><div class="k">Membership Expiry</div><div class="v" id="panelExpiry">—</div></div>
         <div class="panel-field"><div class="k">Outstanding Balance</div><div class="v" id="panelOutstanding">—</div></div>
+        <div class="panel-field">
+          <div class="k">Login Code</div>
+          <div class="v" style="display:flex; align-items:center; gap:8px;">
+            <span id="panelLoginCode">—</span>
+            <button class="ghost small" onclick="regenerateCode()">Regenerate</button>
+          </div>
+        </div>
       </div>
       <div class="panel-actions">
         <button class="ghost" onclick="openAdmissionPay()">Mark Admission Fee Paid</button>
@@ -471,7 +478,7 @@ tr.clickable-row:hover td { background:rgba(139,92,246,.05); }
 </div>
 
 <script>
-const API_BASE = "https://ai-project-gym-dashboard.onrender.com";
+const API_BASE = "";
 const token = localStorage.getItem("admin_token");
 
 if (!token) window.location.href = "/login.html";
@@ -840,6 +847,7 @@ function renderPanel(data) {
   document.getElementById("panelNextDue").textContent = data.next_due_date ? escapeHtml(data.next_due_date) : "—";
   document.getElementById("panelExpiry").textContent = m.expiry_date ? escapeHtml(m.expiry_date) : "—";
   document.getElementById("panelOutstanding").textContent = `Rs. ${data.outstanding_balance || 0}`;
+  document.getElementById("panelLoginCode").textContent = m.login_code || "—";
 
   const body = document.getElementById("panelHistoryBody");
   const history = data.payment_history || [];
@@ -861,6 +869,26 @@ async function refreshPanel() {
   if (currentPanelId) await openPanel(currentPanelId);
   loadMembers();
   loadDashboard(true);
+}
+
+async function regenerateCode() {
+  if (!currentPanelId) return;
+  const m = currentPanelDetail?.member;
+  if (!confirm(`Regenerate the login code for ${m?.name || "this member"}? Their old code will stop working immediately.`)) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/admin/members/${currentPanelId}/regenerate-code`, {
+      method: "POST", headers: authHeaders(),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Could not regenerate login code");
+    document.getElementById("panelLoginCode").textContent = data.login_code;
+    if (currentPanelDetail?.member) currentPanelDetail.member.login_code = data.login_code;
+    patchLocalMember(currentPanelId, { login_code: data.login_code });
+    showBanner("ok", "Login code regenerated.");
+  } catch (err) {
+    showBanner("err", err.message);
+  }
 }
 
 // ── Mark Admission Fee Paid ──────────────────────────────────────
