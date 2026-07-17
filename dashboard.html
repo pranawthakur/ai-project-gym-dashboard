@@ -489,7 +489,7 @@ tr.clickable-row:hover td { background:rgba(139,92,246,.05); }
 </div>
 
 <script>
-const API_BASE = "";
+const API_BASE = "https://ai-project-gym-dashboard.onrender.com";
 const token = localStorage.getItem("admin_token");
 
 if (!token) window.location.href = "/login.html";
@@ -640,11 +640,17 @@ async function loadMembers() {
   const url = new URL(`${API_BASE}/admin/members`);
   if (status) url.searchParams.set("status", status);
 
-  const res = await fetch(url, { headers: authHeaders() });
-  if (res.status === 401 || res.status === 403) return logout();
-  const data = await res.json();
-  allMembers = data.members || [];
-  renderMembersTable();
+  try {
+    const res = await fetch(url, { headers: authHeaders() });
+    if (res.status === 401 || res.status === 403) return logout();
+    if (!res.ok) throw new Error(`members fetch failed (${res.status})`);
+    const data = await res.json();
+    allMembers = data.members || [];
+    renderMembersTable();
+  } catch (err) {
+    const tbody = document.getElementById("membersTableBody");
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8">Could not load members — check your connection to the backend.</td></tr>`;
+  }
 }
 
 // Debounce search so we're not re-rendering the table on every keystroke.
