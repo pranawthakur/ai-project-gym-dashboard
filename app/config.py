@@ -16,6 +16,22 @@ class Settings(BaseSettings):
     # Ugly Vercel URL for now — swap for the real domain later, nothing
     # else needs to change.
     member_frontend_url: str = ""
+    # This backend's own public URL (Render deploy URL), used to build the
+    # /admin/members/{id}/invoice?token=... link sent over WhatsApp — the
+    # invoice route lives here, not on the member-frontend app.
+    public_backend_url: str = ""
+
+    # ── WhatsApp (Meta Cloud API) ──────────────────────────────────────
+    # Leave whatsapp_token/whatsapp_phone_number_id blank to no-op sends
+    # (app.whatsapp.send_template just logs and returns — nothing breaks).
+    whatsapp_token: str = ""
+    whatsapp_phone_number_id: str = ""
+    whatsapp_default_country_code: str = "91"
+    # Names of the pre-approved Meta message templates — see app/whatsapp.py
+    # header comment for the exact body text to submit for approval.
+    wa_template_new_member: str = "member_welcome"
+    wa_template_payment_confirmation: str = "payment_confirmation"
+    wa_template_payment_overdue: str = "payment_overdue"
 
     class Config:
         env_file = ".env"

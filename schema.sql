@@ -90,3 +90,8 @@ alter table members add column if not exists admission_fee_amount numeric;
 alter table members add column if not exists admission_fee_paid boolean not null default false;
 alter table members add column if not exists last_payment_date date;
 
+
+-- WhatsApp overdue-reminder dedup: date the payment_overdue template was
+-- last sent to this member, so the daily cron script (scripts/notify_overdue.py)
+-- doesn't re-text the same member twice in one day on a retried run.
+alter table members add column if not exists last_overdue_notified_date text;

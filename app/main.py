@@ -10,11 +10,13 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 from openpyxl import Workbook
+from jose import jwt, JWTError
 
 from app.db import supabase
 from app.security import verify_password, hash_password
-from app.auth import create_token, require_role, get_current_admin
+from app.auth import create_token, require_role, get_current_admin, create_invoice_token, verify_invoice_token
 from app.config import settings
+from app.whatsapp import send_template
 
 # Grace window (days) after expiry during which a membership is shown as
 # "Overdue" rather than "Expired" — gives the admin a short window to chase
@@ -348,6 +350,14 @@ def generate_login_code() -> str:
     return "".join(random.choices(string.digits, k=8))
 
 
+def build_invoice_link(gym_id: str, member_id: str, payment_id: str) -> str | None:
+    """WhatsApp-safe invoice link — no admin login needed, see create_invoice_token."""
+    if not settings.public_backend_url:
+        return None
+    token = create_invoice_token(member_id, payment_id, gym_id)
+    return f"{settings.public_backend_url.rstrip('/')}/admin/members/{member_id}/invoice?token={token}"
+
+
 @app.post("/admin/members")
 def add_member(body: AddMemberRequest, admin: dict = Depends(require_role("gym_admin"))):
     gym_id = admin["gym_id"]
@@ -439,8 +449,6 @@ def add_member(body: AddMemberRequest, admin: dict = Depends(require_role("gym_a
 
     member.update(compute_member_status(member, today))
 
-    # TODO: trigger WhatsApp send here once messaging provider is wired up
-
     # A bare login code isn't enough for the member to log in — the
     # member-facing app resolves gym via a ?gym=<slug> param and falls
     # back to a hardcoded demo gym if it's missing (see
@@ -457,6 +465,14 @@ def add_member(body: AddMemberRequest, admin: dict = Depends(require_role("gym_a
             gym_slug = None
         if gym_slug:
             login_link = f"{settings.member_frontend_url.rstrip('/')}/login.html.html?gym={gym_slug}"
+
+    # WhatsApp welcome + login code. Fire-and-forget — send_template never
+    # raises, so a WhatsApp outage/misconfig can't fail member creation.
+    send_template(
+        member.get("phone"),
+        settings.wa_template_new_member,
+        [member.get("name") or "there", code, login_link or "ask your gym admin for the login link"],
+    )
 
     return {"member": member, "login_code": code, "login_link": login_link, "payments": payments_created}
 
@@ -641,7 +657,7 @@ def mark_paid(member_id: str, body: MarkPaidRequest, admin: dict = Depends(requi
     gym_id = admin["gym_id"]
 
     try:
-        member = supabase.table("members").select("id").eq("id", member_id).eq("gym_id", gym_id).execute()
+        member = supabase.table("members").select("id,name,phone").eq("id", member_id).eq("gym_id", gym_id).execute()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"member lookup failed: {e}")
     if not member.data:
@@ -673,8 +689,16 @@ def mark_paid(member_id: str, body: MarkPaidRequest, admin: dict = Depends(requi
             detail=f"member expiry_date update failed (does members.expiry_date exist yet?): {e}"
         )
 
-    # TODO: generate invoice PDF (ReportLab/WeasyPrint) and send via WhatsApp
-    # once those providers are wired up — flagged in flowchart, not built yet.
+    # TODO: generate invoice PDF (ReportLab/WeasyPrint) — not built yet.
+    # WhatsApp payment confirmation goes out regardless (no PDF attached,
+    # just amount/plan/new expiry — see app/whatsapp.py template header).
+    m = member.data[0]
+    invoice_link = build_invoice_link(gym_id, member_id, payment.data[0]["id"])
+    send_template(
+        m.get("phone"),
+        settings.wa_template_payment_confirmation,
+        [m.get("name") or "there", body.amount, body.plan, expiry_date, invoice_link or "ask your gym admin"],
+    )
     return {"payment": payment.data[0], "new_expiry_date": expiry_date}
 
 
@@ -690,7 +714,7 @@ class AdmissionFeePaidRequest(BaseModel):
 def pay_admission_fee(member_id: str, body: AdmissionFeePaidRequest, admin: dict = Depends(require_role("gym_admin"))):
     gym_id = admin["gym_id"]
     try:
-        member = supabase.table("members").select("id").eq("id", member_id).eq("gym_id", gym_id).execute()
+        member = supabase.table("members").select("id,name,phone").eq("id", member_id).eq("gym_id", gym_id).execute()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"member lookup failed: {e}")
     if not member.data:
@@ -719,6 +743,13 @@ def pay_admission_fee(member_id: str, body: AdmissionFeePaidRequest, admin: dict
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"member admission_fee_paid update failed: {e}")
 
+    m = member.data[0]
+    invoice_link = build_invoice_link(gym_id, member_id, payment.data[0]["id"])
+    send_template(
+        m.get("phone"),
+        settings.wa_template_payment_confirmation,
+        [m.get("name") or "there", body.amount, "Admission Fee", "—", invoice_link or "ask your gym admin"],
+    )
     return {"payment": payment.data[0], "member": updated.data[0]}
 
 
@@ -776,6 +807,12 @@ def pay_monthly_membership(member_id: str, body: MonthlyPaymentRequest, admin: d
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"member expiry update failed: {e}")
 
+    invoice_link = build_invoice_link(gym_id, member_id, payment.data[0]["id"])
+    send_template(
+        member.get("phone"),
+        settings.wa_template_payment_confirmation,
+        [member.get("name") or "there", body.amount, body.plan or member.get("membership_plan") or "Membership", new_expiry, invoice_link or "ask your gym admin"],
+    )
     return {"payment": payment.data[0], "member": updated.data[0], "new_expiry_date": new_expiry}
 
 
@@ -814,9 +851,31 @@ def extend_membership(member_id: str, body: ExtendMembershipRequest, admin: dict
 # printable HTML invoice (the browser's own "Print to PDF" covers the PDF
 # need without adding a new dependency). Defaults to the most recent
 # payment; pass ?payment_id= to invoice a specific one.
+#
+# Two ways in:
+#   1. Admin dashboard: normal Authorization: Bearer <admin-jwt> header.
+#   2. WhatsApp invoice link sent to a member: ?token=<invoice-token>,
+#      no header needed — a WhatsApp link tap can't attach one anyway.
+# token wins if both happen to be present.
 @app.get("/admin/members/{member_id}/invoice", response_class=HTMLResponse)
-def generate_invoice(member_id: str, payment_id: str | None = None, admin: dict = Depends(require_role("gym_admin"))):
-    gym_id = admin["gym_id"]
+def generate_invoice(member_id: str, request: Request, payment_id: str | None = None, token: str | None = None):
+    if token:
+        payload = verify_invoice_token(token)
+        if not payload or payload.get("member_id") != member_id or (payment_id and payload.get("payment_id") != payment_id):
+            raise HTTPException(status_code=403, detail="Invalid or expired invoice link.")
+        gym_id = payload["gym_id"]
+        if not payment_id:
+            payment_id = payload.get("payment_id")
+    else:
+        auth_header = request.headers.get("authorization", "")
+        if not auth_header.lower().startswith("bearer "):
+            raise HTTPException(status_code=401, detail="Not authenticated.")
+        try:
+            admin_payload = jwt.decode(auth_header.split(" ", 1)[1], settings.jwt_secret, algorithms=["HS256"])
+        except JWTError as e:
+            raise HTTPException(status_code=401, detail=f"Invalid or expired token: {e}")
+        gym_id = admin_payload["gym_id"]
+
     try:
         member_res = supabase.table("members").select("*").eq("id", member_id).eq("gym_id", gym_id).execute()
     except Exception as e:

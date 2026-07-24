@@ -53,3 +53,27 @@ def require_role(required_role: str):
             )
         return admin
     return checker
+
+
+# ── Invoice link tokens ──────────────────────────────────────────────────
+# Lets a member open ONE specific invoice from a WhatsApp link with no
+# admin login. Scoped to scope="invoice" + the exact member_id/payment_id/
+# gym_id, so even a guessed/leaked token can't be reused to browse any
+# other member's or gym's invoices — just replays the same one page.
+def create_invoice_token(member_id: str, payment_id: str, gym_id: str, days_valid: int = 365) -> str:
+    payload = {
+        "scope": "invoice",
+        "member_id": member_id,
+        "payment_id": payment_id,
+        "gym_id": gym_id,
+        "exp": datetime.now(timezone.utc) + timedelta(days=days_valid),
+    }
+    return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
+
+
+def verify_invoice_token(token: str) -> dict | None:
+    try:
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
+    except JWTError:
+        return None
+    return payload if payload.get("scope") == "invoice" else None
